@@ -1,5 +1,13 @@
+const withPWA = require('next-pwa')({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  disable: process.env.NODE_ENV === 'development',
+})
+
 /** @type {import('next').NextConfig} */
-module.exports = {
+const nextConfig = {
   reactStrictMode: true,
-  // Next.js App Router is enabled by default; remove experimental.appDir
-};
+}
+
+module.exports = withPWA(nextConfig)

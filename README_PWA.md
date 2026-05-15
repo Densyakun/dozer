@@ -1,33 +1,43 @@
-# Dozer — PWA初期化メモ
+# Dozer — PWA 初期化メモ
 
-このファイルはフェーズ1のPWA初期化に関する最小構成を記録します。
+フェーズ1の PWA 初期化の構成と手順です。
 
-追加済みファイル:
-- `public/manifest.json`
-- `app/page.tsx`
+## 構成
 
-次の手順:
-1. アイコン `public/icons/icon-192.png` と `icon-512.png` を配置してください（現状は参照のみ）。
-2. `next-pwa` を使用する場合は `npm install next-pwa` を行い、`next.config.js` を調整してください。
-3. 開発サーバを起動して確認:
+- `public/manifest.json` — Web App Manifest（`metadata.manifest` と併用）
+- `public/icons/icon-192.png`, `public/icons/icon-512.png` — マニフェスト用アイコン（現状は開発用プレースホルダ。本番ではブランド用に差し替えてください）
+- `next.config.js` — `next-pwa` により本番ビルドで Service Worker（`public/sw.js`）を生成。開発時（`next dev`）は無効です
+- `app/layout.tsx` — `metadata` で `manifest` / `themeColor` / `appleWebApp` を指定
+
+## ローカル確認
 
 ```bash
 npm install
 npm run dev
 ```
 
-Git ブランチ・コミット手順（タスクごと）:
-
-1. 新しいタスク用ブランチを作成:
+本番相当の PWA 挙動（Service Worker 登録など）を確認する場合:
 
 ```bash
-./scripts/branch-and-commit.sh "task-name"
+npm run build
+npm start
 ```
 
-2. 変更を行ったらコミット:
+## Git（main とは別ブランチで作業）
 
 ```bash
-./scripts/branch-and-commit.sh commit "短いコミットメッセージ"
-git push -u origin feat/task/task-name
+git checkout main
+git pull
+git checkout -b feat/task/<短いタスク名>
+# 変更後
+git add -A
+git status   # .env や秘密情報が混ざっていないか確認
+git commit -m "feat: 変更内容の要約"
+git push -u origin HEAD
 ```
 
+作業用ブランチ例: `feat/task/pwa-phase1`
+
+## 環境変数（Supabase）
+
+`.env.local` に `NEXT_PUBLIC_SUPABASE_URL` と `NEXT_PUBLIC_SUPABASE_ANON_KEY` を設定してください（未設定でもアプリは起動しますが、クライアントの Supabase は `null` になります）。

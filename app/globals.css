@@ -2,28 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #__next {
-  height: 100%;
-}
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.min-h-screen { min-height: 100vh; }
-.bg-gray-50 { background-color: #f9fafb; }
-.text-gray-900 { color: #111827; }
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
-:root{
+:root {
   --bg: #f8fafc;
   --surface: #ffffff;
   --muted: #6b7280;
 }
 
-html, body, #__next {
+html,
+body,
+#__next {
   height: 100%;
 }
 
@@ -31,12 +18,17 @@ body {
   background: var(--bg);
   color: #111827;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Mobile-friendly large touch targets */
-button, input {
+/* Mobile-friendly touch targets (avoid iOS zoom on focus) */
+button,
+input {
   font-size: 16px;
 }
 
-/* Simple layout helpers */
-.flex-center{display:flex;align-items:center;justify-content:center}
+.flex-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
