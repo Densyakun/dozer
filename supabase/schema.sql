@@ -90,3 +90,6 @@ CREATE TABLE IF NOT EXISTS workspace_files (
 
 CREATE INDEX IF NOT EXISTS idx_workspace_files_workspace ON workspace_files(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_workspace_files_path ON workspace_files(workspace_id, path);
+
+-- Realtime publication for workspace_files
+ALTER PUBLICATION supabase_realtime ADD TABLE workspace_files;
