@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { getOpenAIConfig } from '../../../lib/agent/config'
+import { getPortKeyConfig } from '../../../lib/agent/config'
 import { runAgent } from '../../../lib/agent/runAgent'
 import type { AgentStatus } from '../../../lib/agent/types'
 
 function agentStatus(): AgentStatus {
-  const { connected, model } = getOpenAIConfig()
+  const { connected, model } = getPortKeyConfig()
   if (connected) {
     return {
       ok: true,
       connected: true,
-      provider: 'openai',
+      provider: 'portkey',
       model,
       status: 'ready',
     }
@@ -20,7 +20,7 @@ function agentStatus(): AgentStatus {
     connected: false,
     provider: 'mock',
     status: 'mock',
-    hint: '.env.local に OPENAI_API_KEY を設定し、npm run dev を再起動してください。',
+    hint: '.env.local に PORTKEY_API_KEY と PORTKEY_CONFIG_ID を設定し、npm run dev を再起動してください。',
   }
 }
 
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       {
         ok: false,
-        connected: getOpenAIConfig().connected,
+        connected: getPortKeyConfig().connected,
         error: message,
         action: { type: 'message', text: `エラー: ${message}` },
       },

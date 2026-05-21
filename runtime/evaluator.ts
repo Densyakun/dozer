@@ -1,5 +1,24 @@
-export async function evaluateTSX(code: string) {
-  // Minimal safe-eval placeholder for Phase1; real sandbox integration required later.
-  // Here we return HTML string to render in iframe preview.
-  return `<!doctype html><html><body>${code}</body></html>`
+'use client'
+
+import { safeRenderTsx, type EvalResult } from '../evaluator/tsxSafeEval'
+
+export type EvaluationResult = {
+  success: boolean
+  html?: string
+  error?: string
+}
+
+export async function evaluateTSX(code: string): Promise<EvaluationResult> {
+  const result: EvalResult = safeRenderTsx(code)
+  
+  if (result.ok && result.html) {
+    return { success: true, html: result.html }
+  }
+  
+  return { success: false, error: result.error ?? 'Unknown error' }
+}
+
+export function generatePreviewHtml(code: string): string {
+  const result = safeRenderTsx(code)
+  return result.html ?? '<!doctype html><html><body><pre>Error: Failed to generate preview</pre></body></html>'
 }

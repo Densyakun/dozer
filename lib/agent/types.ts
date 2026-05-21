@@ -19,7 +19,7 @@ export type AgentResult = {
 export type AgentStatus = {
   ok: boolean
   connected: boolean
-  provider: 'openai' | 'mock'
+  provider: 'portkey' | 'mock'
   model?: string
   status: string
   hint?: string

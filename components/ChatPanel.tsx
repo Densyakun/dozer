@@ -1,18 +1,13 @@
 'use client'
 
-import React, { useCallback, useEffect, useState } from 'react'
-
-type AgentAction = {
-  type: string
-  path?: string
-  content?: string
-  command?: string
-}
+import React, { useCallback, useEffect, useRef } from 'react'
+import { useAgentStore } from '../lib/store/agentStore'
+import { useFileSystemStore } from '../lib/store/fileSystem'
 
 type AgentStatus = {
   ok: boolean
   connected: boolean
-  provider: 'openai' | 'mock'
+  provider: 'portkey' | 'mock'
   model?: string
   status: string
   hint?: string
@@ -24,69 +19,82 @@ type AgentResponse = {
   provider?: string
   action?: { type?: string; text?: string }
   message?: string
-  actions?: AgentAction[]
+  actions?: { type: string; path?: string; content?: string; command?: string }[]
   error?: string
 }
 
-async function executeActions(actions: AgentAction[]): Promise<string[]> {
+async function executeActions(actions: { type: string; path?: string; content?: string; command?: string }[]) {
   const lines: string[] = []
   for (const action of actions) {
-    const res = await fetch('/api/action', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(action),
-    })
-    const data = (await res.json()) as { ok?: boolean; message?: string; error?: string }
-    if (action.type === 'writeFile' && action.path) {
-      lines.push(
-        data.ok
-          ? `✓ writeFile ${action.path}: ${data.message ?? 'ok'}`
-          : `✗ writeFile ${action.path}: ${data.error ?? 'failed'}`
-      )
-    } else if (action.type === 'runCommand' && action.command) {
-      lines.push(
-        data.ok
-          ? `✓ runCommand ${action.command}: ${data.message ?? 'ok'}`
-          : `✗ runCommand: ${data.error ?? 'failed'}`
-      )
+    try {
+      const res = await fetch('/api/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(action),
+      })
+      const data = (await res.json()) as { ok?: boolean; message?: string; error?: string }
+      
+      if (action.type === 'writeFile' && action.path) {
+        if (data.ok && action.content) {
+          useFileSystemStore.getState().updateFile(action.path, action.content)
+          lines.push(`✓ writeFile ${action.path}`)
+        } else {
+          lines.push(`✗ writeFile ${action.path}: ${data.error ?? 'failed'}`)
+        }
+      } else if (action.type === 'runCommand' && action.command) {
+        lines.push(
+          data.ok
+            ? `✓ runCommand ${action.command}`
+            : `✗ runCommand: ${data.error ?? 'failed'}`
+        )
+      }
+    } catch (err) {
+      lines.push(`✗ Error: ${String(err)}`)
     }
   }
   return lines
 }
 
 export default function ChatPanel() {
-  const [input, setInput] = useState('')
-  const [log, setLog] = useState<string[]>([])
-  const [status, setStatus] = useState<AgentStatus | null>(null)
-  const [loading, setLoading] = useState(false)
-
+  const messages = useAgentStore(s => s.messages)
+  const status = useAgentStore(s => s.status)
+  const isConnected = useAgentStore(s => s.isConnected)
+  const model = useAgentStore(s => s.model)
+  const addMessage = useAgentStore(s => s.addMessage)
+  const setStatus = useAgentStore(s => s.setStatus)
+  const setConnected = useAgentStore(s => s.setConnected)
+  
+  const [input, setInput] = React.useState('')
+  const messagesEndRef = useRef<HTMLDivElement>(null)
+  
   const loadStatus = useCallback(async () => {
     try {
       const res = await fetch('/api/agent')
       const data = (await res.json()) as AgentStatus
-      setStatus(data)
+      setConnected(data.connected, data.model)
     } catch {
-      setStatus({
-        ok: false,
-        connected: false,
-        provider: 'mock',
-        status: 'error',
-        hint: 'サーバに接続できません。npm run dev が起動しているか確認してください。',
-      })
+      setConnected(false)
     }
-  }, [])
-
+  }, [setConnected])
+  
   useEffect(() => {
     void loadStatus()
   }, [loadStatus])
-
+  
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages])
+  
   async function send(e?: React.FormEvent) {
     e?.preventDefault()
-    if (!input.trim() || loading) return
     const prompt = input.trim()
-    setLog((s) => [...s, `あなた: ${prompt}`])
+    if (!prompt) return
+    if (status === 'thinking') return
+    
     setInput('')
-    setLoading(true)
+    addMessage({ role: 'user', content: prompt })
+    setStatus('thinking')
+    
     try {
       const res = await fetch('/api/agent', {
         method: 'POST',
@@ -94,75 +102,79 @@ export default function ChatPanel() {
         body: JSON.stringify({ prompt }),
       })
       const data = (await res.json()) as AgentResponse
+      
       const text =
         data.message ??
         data.action?.text ??
         data.error ??
-        (data.ok === false ? 'エラーが発生しました' : JSON.stringify(data))
-      setLog((s) => [...s, `エージェント: ${text}`])
-
+        (data.ok === false ? 'エラーが発生しました' : '応答がありません')
+      
+      addMessage({ role: 'agent', content: text, actions: data.actions })
+      
       if (Array.isArray(data.actions) && data.actions.length > 0) {
+        setStatus('executing')
         const execLines = await executeActions(data.actions)
         if (execLines.length > 0) {
-          setLog((s) => [...s, ...execLines.map((l) => `  ${l}`)])
+          addMessage({ role: 'system', content: execLines.join('\n') })
         }
       }
-
-      if (typeof data.connected === 'boolean') {
-        setStatus((prev) =>
-          prev
-            ? {
-                ...prev,
-                connected: data.connected!,
-                provider: (data.provider as 'openai' | 'mock') ?? prev.provider,
-              }
-            : prev
-        )
-      }
     } catch (err) {
-      setLog((s) => [...s, `エージェント: 通信エラー (${String(err)})`])
+      addMessage({ role: 'agent', content: `通信エラー: ${String(err)}` })
     } finally {
-      setLoading(false)
+      setStatus('idle')
     }
   }
-
-  const statusLabel = !status
-    ? '接続確認中…'
-    : status.connected
-      ? `AI 接続済み (${status.model ?? 'OpenAI'})`
-      : 'モックモード（API キー未設定）'
-
-  const statusClass = !status
-    ? 'bg-gray-100 text-gray-600'
-    : status.connected
-      ? 'bg-green-50 text-green-800 border-green-200'
-      : 'bg-amber-50 text-amber-900 border-amber-200'
-
+  
+  const statusLabel = isConnected
+    ? `AI 接続済み (${model})`
+    : 'モックモード'
+  
+  const statusClass = isConnected
+    ? 'bg-green-50 text-green-800 border-green-200'
+    : 'bg-amber-50 text-amber-900 border-amber-200'
+  
   return (
     <div className="p-4 h-full flex flex-col bg-white min-h-0">
       <div
         className={`mb-2 px-3 py-2 rounded-lg border text-xs shrink-0 ${statusClass}`}
         role="status"
       >
-        <div className="font-medium">{statusLabel}</div>
-        {status?.hint && !status.connected && (
-          <div className="mt-1 opacity-90">{status.hint}</div>
-        )}
+        <div className="font-medium flex items-center gap-2">
+          <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-amber-400'}`} />
+          {statusLabel}
+        </div>
+        {status === 'thinking' && <div className="mt-1 text-gray-600">考え中...</div>}
+        {status === 'executing' && <div className="mt-1 text-gray-600">アクション実行中...</div>}
       </div>
 
       <div className="flex-1 overflow-auto mb-2 rounded-lg bg-gray-50 p-3 border border-gray-100 min-h-0">
-        {log.length === 0 ? (
+        {messages.length === 0 ? (
           <div className="text-sm text-gray-500">
             AI に指示を送ると、ここに応答とアクション（writeFile 等）が表示されます。
           </div>
         ) : (
-          log.map((l, i) => (
-            <div key={i} className="text-sm py-1 whitespace-pre-wrap">
-              {l}
+          messages.map((msg) => (
+            <div key={msg.id} className={`mb-3 ${msg.role === 'system' ? 'text-xs text-gray-500' : 'text-sm'}`}>
+              <div className={`font-medium ${
+                msg.role === 'user' ? 'text-blue-600' :
+                msg.role === 'agent' ? 'text-gray-800' : 'text-gray-400'
+              }`}>
+                {msg.role === 'user' ? 'あなた' : msg.role === 'agent' ? 'エージェント' : 'システム'}
+              </div>
+              <div className="mt-1 whitespace-pre-wrap">{msg.content}</div>
+              {msg.actions && msg.actions.length > 0 && (
+                <div className="mt-2 text-xs">
+                  {msg.actions.map((a, i) => (
+                    <div key={i} className="text-gray-600">
+                      {a.type === 'writeFile' ? `📝 ${a.path}` : `⚡ ${a.command}`}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           ))
         )}
-        {loading && <div className="text-sm text-gray-500 mt-2">考え中…</div>}
+        <div ref={messagesEndRef} />
       </div>
 
       <form className="flex gap-2 shrink-0" onSubmit={send}>
@@ -172,14 +184,14 @@ export default function ChatPanel() {
           placeholder="AIに指示を入力"
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          disabled={loading}
+          disabled={status === 'thinking'}
         />
         <button
           type="submit"
           className="bg-blue-600 text-white px-4 py-3 rounded-lg shrink-0 font-medium disabled:opacity-60"
-          disabled={loading}
+          disabled={status === 'thinking' || !input.trim()}
         >
-          {loading ? '…' : '送信'}
+          {status === 'thinking' ? '…' : '送信'}
         </button>
       </form>
     </div>

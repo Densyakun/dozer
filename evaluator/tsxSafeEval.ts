@@ -1,20 +1,71 @@
-import React from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+'use client'
 
-export function safeRenderTsx(source: string) {
-  // Extremely minimal: evaluates a React component factory string in a safe env.
-  // WARNING: This is a stub — do NOT use in production without sandboxing.
-  // Expect source to export default a React component factory.
-  // For example: `export default () => <div>Hi</div>`
+export type EvalResult = {
+  ok: boolean
+  html?: string
+  error?: string
+}
+
+const REACT_CDN = 'https://unpkg.com/react@18.2.0/umd/react.production.min.js'
+const REACT_DOM_CDN = 'https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js'
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
+}
+
+function buildPreviewHtml(code: string): string {
+  const escapedCode = escapeHtml(code)
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="${REACT_CDN}"></script>
+  <script src="${REACT_DOM_CDN}"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+  <div id="root"></div>
+  <script>
+    try {
+      const code = ${JSON.stringify(code)};
+      const fn = new Function('React', 'ReactDOM', code + '\\nreturn typeof exports !== \\'undefined\\' ? exports.default : typeof default !== \\'undefined\\' ? default : null;');
+      const Component = fn(React, ReactDOM);
+      if (Component && typeof Component === 'function') {
+        const element = React.createElement(Component);
+        ReactDOM.render(element, document.getElementById('root'));
+      } else {
+        document.getElementById('root').innerHTML = '<pre style="padding:1rem;background:#fee;white-space:pre-wrap;">No default export found in component</pre>';
+      }
+    } catch (err) {
+      document.getElementById('root').innerHTML = '<pre style="padding:1rem;background:#fee;white-space:pre-wrap;">' + (err.message || String(err)) + '</pre>';
+    }
+  </script>
+</body>
+</html>`
+}
+
+export function safeRenderTsx(source: string): EvalResult {
   try {
-    // eslint-disable-next-line no-new-func -- demo-only dynamic eval; replace with a real sandbox
-    const fn = new Function('React', `${source}; return exports.default || module.exports.default`) as (
-      react: typeof React
-    ) => React.ComponentType<Record<string, never>>
-    const Comp = fn(React)
-    const html = renderToStaticMarkup(React.createElement(Comp))
+    const html = buildPreviewHtml(source)
     return { ok: true, html }
   } catch (err) {
     return { ok: false, error: String(err) }
   }
+}
+
+export async function evaluateTsxAsync(source: string): Promise<EvalResult> {
+  return new Promise((resolve) => {
+    try {
+      const html = buildPreviewHtml(source)
+      resolve({ ok: true, html })
+    } catch (err) {
+      resolve({ ok: false, error: String(err) })
+    }
+  })
 }

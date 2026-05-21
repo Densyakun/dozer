@@ -1,4 +1,4 @@
-import { getOpenAIConfig } from './config'
+import { getPortKeyConfig } from './config'
 import { AGENT_SYSTEM_PROMPT } from './systemPrompt'
 import type { AgentAction, AgentResult } from './types'
 
@@ -25,7 +25,7 @@ function parseAgentJson(raw: string): AgentResult {
 
 export async function runMockAgent(prompt: string): Promise<AgentResult> {
   return {
-    message: `（モックモード）「${prompt.slice(0, 120)}」を受け取りました。実際の AI を使うには .env.local に OPENAI_API_KEY を設定してサーバを再起動してください。`,
+    message: `（モックモード）「${prompt.slice(0, 120)}」を受け取りました。実際の AI を使うには .env.local に PORTKEY_API_KEY を設定してサーバを再起動してください。`,
     actions: [
       {
         type: 'writeFile',
@@ -36,18 +36,23 @@ export async function runMockAgent(prompt: string): Promise<AgentResult> {
   }
 }
 
-export async function runOpenAIAgent(prompt: string): Promise<AgentResult> {
-  const { apiKey, model, baseUrl } = getOpenAIConfig()
-  if (!apiKey) {
+export async function runPortKeyAgent(prompt: string): Promise<AgentResult> {
+  const { apiKey, model, baseUrl, configId } = getPortKeyConfig()
+  if (!apiKey || !configId) {
     return runMockAgent(prompt)
   }
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${apiKey}`,
+    'x-portkey-config': configId,
+  }
+
+  const url = `${baseUrl}/chat/completions`
+
+  const res = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model,
       temperature: 0.2,
@@ -62,7 +67,7 @@ export async function runOpenAIAgent(prompt: string): Promise<AgentResult> {
   if (!res.ok) {
     const errText = await res.text().catch(() => '')
     throw new Error(
-      `OpenAI API error ${res.status}: ${errText.slice(0, 300) || res.statusText}`
+      `PortKey API error ${res.status}: ${errText.slice(0, 300) || res.statusText}`
     )
   }
 
@@ -71,16 +76,16 @@ export async function runOpenAIAgent(prompt: string): Promise<AgentResult> {
   }
   const content = data.choices?.[0]?.message?.content
   if (!content) {
-    throw new Error('OpenAI returned an empty response')
+    throw new Error('PortKey returned an empty response')
   }
 
   return parseAgentJson(content)
 }
 
 export async function runAgent(prompt: string): Promise<AgentResult> {
-  const { connected } = getOpenAIConfig()
+  const { connected } = getPortKeyConfig()
   if (!connected) {
     return runMockAgent(prompt)
   }
-  return runOpenAIAgent(prompt)
+  return runPortKeyAgent(prompt)
 }
