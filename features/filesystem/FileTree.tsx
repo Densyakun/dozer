@@ -2,14 +2,14 @@
 
 import React, { useCallback, useState } from 'react'
 import { useFileSystemStore } from '../../lib/store/fileSystem'
-import { useProjectStore } from '../../lib/store/projectStore'
+import { useWorkspaceStore } from '../../lib/store/workspaceStore'
 import { lazyLoadFile } from '../../lib/filesystem/lazyLoader'
 import type { FileTreeNode } from '../../types'
 
 function TreeNode({
   node,
   level,
-  projectId,
+  workspaceId,
   onSelect,
   onRename,
   onDelete,
@@ -19,7 +19,7 @@ function TreeNode({
 }: {
   node: FileTreeNode
   level: number
-  projectId: string
+  workspaceId: string
   onSelect: (path: string) => void
   onRename: (path: string) => void
   onDelete: (path: string) => void
@@ -61,7 +61,6 @@ function TreeNode({
         }}
         onContextMenu={(e) => {
           e.preventDefault()
-          // Could show context menu here
         }}
       >
         <span className="shrink-0 w-4 text-center text-xs text-gray-400">
@@ -82,7 +81,7 @@ function TreeNode({
               key={child.path}
               node={child}
               level={level + 1}
-              projectId={projectId}
+              workspaceId={workspaceId}
               onSelect={onSelect}
               onRename={onRename}
               onDelete={onDelete}
@@ -125,7 +124,7 @@ export default function FileTree() {
   const createFolder = useFileSystemStore(s => s.createFolder)
   const renameFile = useFileSystemStore(s => s.renameFile)
   const deleteEntity = useFileSystemStore(s => s.deleteEntity)
-  const activeProject = useProjectStore(s => s.activeProject)
+  const activeWorkspace = useWorkspaceStore(s => s.activeWorkspace)
 
   const [contextMenu, setContextMenu] = useState<{ path: string; x: number; y: number } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -134,13 +133,13 @@ export default function FileTree() {
   const [creatingFolder, setCreatingFolder] = useState<string | null>(null)
   const [createValue, setCreateValue] = useState('')
 
-  const projectId = activeProject?.id ?? '1'
+  const workspaceId = activeWorkspace?.id ?? '1'
 
   const handleSelect = useCallback(async (path: string) => {
     openFile(path)
     setCurrentFile(path)
-    await lazyLoadFile(projectId, path)
-  }, [openFile, setCurrentFile, projectId])
+    await lazyLoadFile(workspaceId, path)
+  }, [openFile, setCurrentFile, workspaceId])
 
   const handleRename = useCallback((path: string) => {
     setRenaming(path)
@@ -153,17 +152,17 @@ export default function FileTree() {
       const parts = renaming.split('/')
       parts[parts.length - 1] = renameValue
       const newPath = parts.join('/')
-      await renameFile(projectId, renaming, newPath)
+      await renameFile(workspaceId, renaming, newPath)
     }
     setRenaming(null)
-  }, [renaming, renameValue, renameFile, projectId])
+  }, [renaming, renameValue, renameFile, workspaceId])
 
   const handleDelete = useCallback(async (path: string) => {
     if (confirm(`Delete "${path}"?`)) {
-      await deleteEntity(projectId, path)
+      await deleteEntity(workspaceId, path)
     }
     setContextMenu(null)
-  }, [deleteEntity, projectId])
+  }, [deleteEntity, workspaceId])
 
   const handleCreateFile = useCallback((parentPath: string) => {
     setCreatingFile(parentPath)
@@ -178,15 +177,15 @@ export default function FileTree() {
   const submitCreate = useCallback(async () => {
     if (creatingFile && createValue) {
       const path = creatingFile === '/' ? `/${createValue}` : `${creatingFile}/${createValue}`
-      await createFile(projectId, path)
+      await createFile(workspaceId, path)
     } else if (creatingFolder && createValue) {
       const path = creatingFolder === '/' ? `/${createValue}` : `${creatingFolder}/${createValue}`
-      await createFolder(projectId, path)
+      await createFolder(workspaceId, path)
     }
     setCreatingFile(null)
     setCreatingFolder(null)
     setCreateValue('')
-  }, [creatingFile, creatingFolder, createValue, createFile, createFolder, projectId])
+  }, [creatingFile, creatingFolder, createValue, createFile, createFolder, workspaceId])
 
   return (
     <div className="p-3 h-full overflow-auto bg-white">
@@ -241,7 +240,7 @@ export default function FileTree() {
             key={node.path}
             node={node}
             level={0}
-            projectId={projectId}
+            workspaceId={workspaceId}
             onSelect={handleSelect}
             onRename={handleRename}
             onDelete={handleDelete}

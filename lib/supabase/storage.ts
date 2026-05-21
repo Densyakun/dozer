@@ -2,9 +2,9 @@ import { supabase } from '../supabaseClient'
 
 const BUCKET_NAME = 'git-mirror'
 
-export function getStoragePath(projectId: string, filePath: string): string {
+export function getStoragePath(workspaceId: string, filePath: string): string {
   const clean = filePath.replace(/^\/+/, '').replace(/\\/g, '/')
-  return `${projectId}/${clean}`
+  return `${workspaceId}/${clean}`
 }
 
 export function shouldExclude(filePath: string): boolean {
@@ -13,14 +13,14 @@ export function shouldExclude(filePath: string): boolean {
 }
 
 export async function uploadFile(
-  projectId: string,
+  workspaceId: string,
   filePath: string,
   content: string | Blob
 ): Promise<{ ok: boolean; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase not connected' }
   if (shouldExclude(filePath)) return { ok: false, error: 'File excluded' }
 
-  const storagePath = getStoragePath(projectId, filePath)
+  const storagePath = getStoragePath(workspaceId, filePath)
   const { error } = await supabase.storage
     .from(BUCKET_NAME)
     .upload(storagePath, content, { upsert: true })
@@ -30,12 +30,12 @@ export async function uploadFile(
 }
 
 export async function downloadFile(
-  projectId: string,
+  workspaceId: string,
   filePath: string
 ): Promise<{ ok: boolean; content?: string; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase not connected' }
 
-  const storagePath = getStoragePath(projectId, filePath)
+  const storagePath = getStoragePath(workspaceId, filePath)
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
     .download(storagePath)
@@ -46,12 +46,12 @@ export async function downloadFile(
 }
 
 export async function deleteFile(
-  projectId: string,
+  workspaceId: string,
   filePath: string
 ): Promise<{ ok: boolean; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase not connected' }
 
-  const storagePath = getStoragePath(projectId, filePath)
+  const storagePath = getStoragePath(workspaceId, filePath)
   const { error } = await supabase.storage
     .from(BUCKET_NAME)
     .remove([storagePath])
@@ -61,14 +61,14 @@ export async function deleteFile(
 }
 
 export async function listFiles(
-  projectId: string,
+  workspaceId: string,
   prefix: string = ''
 ): Promise<{ ok: boolean; files?: { name: string; path: string; type: 'file' | 'directory' }[]; error?: string }> {
   if (!supabase) return { ok: false, error: 'Supabase not connected' }
 
   const searchPrefix = prefix
-    ? `${projectId}/${prefix.replace(/^\/+/, '')}`
-    : projectId
+    ? `${workspaceId}/${prefix.replace(/^\/+/, '')}`
+    : workspaceId
 
   const { data, error } = await supabase.storage
     .from(BUCKET_NAME)
@@ -88,11 +88,11 @@ export async function listFiles(
 }
 
 export async function fileExists(
-  projectId: string,
+  workspaceId: string,
   filePath: string
 ): Promise<boolean> {
   if (!supabase) return false
-  const storagePath = getStoragePath(projectId, filePath)
+  const storagePath = getStoragePath(workspaceId, filePath)
   const { data } = await supabase.storage
     .from(BUCKET_NAME)
     .list(storagePath)

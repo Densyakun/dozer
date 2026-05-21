@@ -14,7 +14,7 @@ export type ActionResult = {
 }
 
 export async function executeAction(action: Action): Promise<ActionResult> {
-  const projectId = '1' // default project
+  const workspaceId = '1' // default project
 
   switch (action.type) {
     case 'writeFile': {
@@ -45,7 +45,7 @@ export async function executeAction(action: Action): Promise<ActionResult> {
         const { useFileSystemStore } = await import('../lib/store/fileSystem')
         const store = useFileSystemStore.getState()
         store.closeFile(action.path)
-        await store.deleteEntity(projectId, action.path)
+        await store.deleteEntity(workspaceId, action.path)
 
         if (supabase) {
           await broadcastFileChange({

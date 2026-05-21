@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { useAgentStore } from '../lib/store/agentStore'
 import { useFileSystemStore } from '../lib/store/fileSystem'
-import { useProjectStore } from '../lib/store/projectStore'
+import { useWorkspaceStore } from '../lib/store/workspaceStore'
 import { executeAIActions, type AIFileAction } from '../features/ai/AIFileActions'
 
 type AgentStatus = {
@@ -35,13 +35,13 @@ export default function ChatPanel() {
   const addMessage = useAgentStore(s => s.addMessage)
   const setStatus = useAgentStore(s => s.setStatus)
   const setConnected = useAgentStore(s => s.setConnected)
-  const activeProject = useProjectStore(s => s.activeProject)
+  const activeWorkspace = useWorkspaceStore(s => s.activeWorkspace)
   const loadTree = useFileSystemStore(s => s.loadTree)
 
   const [input, setInput] = React.useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  const projectId = activeProject?.id ?? '1'
+  const workspaceId = activeWorkspace?.id ?? '1'
 
   const loadStatus = useCallback(async () => {
     try {
@@ -89,12 +89,12 @@ export default function ChatPanel() {
 
       if (Array.isArray(data.actions) && data.actions.length > 0) {
         setStatus('executing')
-        const results = await executeAIActions(data.actions as AIFileAction[], projectId)
+        const results = await executeAIActions(data.actions as AIFileAction[], workspaceId)
         if (results.length > 0) {
           const summary = results.map(r => `${r.ok ? 'OK' : 'FAIL'} ${r.message}`).join('\n')
           addMessage({ role: 'system', content: summary })
         }
-        void loadTree(projectId)
+        void loadTree(workspaceId)
       }
     } catch (err) {
       addMessage({ role: 'agent', content: `Communication error: ${String(err)}` })

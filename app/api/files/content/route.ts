@@ -4,15 +4,15 @@ import { readFileContent } from '../../../../lib/git/server'
 
 export async function GET(req: NextRequest) {
   try {
-    const projectId = req.nextUrl.searchParams.get('projectId')
+    const workspaceId = req.nextUrl.searchParams.get('workspaceId')
     const filePath = req.nextUrl.searchParams.get('path')
 
-    if (!projectId || !filePath) {
-      return NextResponse.json({ error: 'projectId and path required' }, { status: 400 })
+    if (!workspaceId || !filePath) {
+      return NextResponse.json({ error: 'workspaceId and path required' }, { status: 400 })
     }
 
     const cleanPath = filePath.startsWith('/') ? filePath.slice(1) : filePath
-    const content = await readFileContent(projectId, cleanPath)
+    const content = await readFileContent(workspaceId, cleanPath)
     return NextResponse.json({ content })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

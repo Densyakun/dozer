@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../lib/supabaseClient'
 
-export type MobileTab = 'projects' | 'files' | 'preview' | 'agent' | 'git'
+export type MobileTab = 'workspaces' | 'files' | 'preview' | 'agent' | 'git'
 
 type MobileShellProps = {
   activeTab: MobileTab
@@ -12,7 +12,7 @@ type MobileShellProps = {
 }
 
 const TABS: { id: MobileTab; label: string }[] = [
-  { id: 'projects', label: 'プロジェクト' },
+  { id: 'workspaces', label: 'ワークスペース' },
   { id: 'files', label: 'ファイル' },
   { id: 'preview', label: 'プレビュー' },
   { id: 'agent', label: 'エージェント' },

@@ -7,7 +7,7 @@ const contentCache = new Map<string, string>()
 const loadingFiles = new Set<string>()
 
 export async function lazyLoadFile(
-  projectId: string,
+  workspaceId: string,
   path: string
 ): Promise<string | null> {
   if (contentCache.has(path)) {
@@ -33,7 +33,7 @@ export async function lazyLoadFile(
 
   try {
     const store = useFileSystemStore.getState()
-    const content = await store.loadFileContent(projectId, path)
+    const content = await store.loadFileContent(workspaceId, path)
 
     if (content !== null) {
       contentCache.set(path, content)

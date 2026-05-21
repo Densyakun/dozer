@@ -4,14 +4,14 @@ import { gitDiff } from '../../../../lib/git/server'
 
 export async function GET(req: NextRequest) {
   try {
-    const projectId = req.nextUrl.searchParams.get('projectId')
+    const workspaceId = req.nextUrl.searchParams.get('workspaceId')
     const filePath = req.nextUrl.searchParams.get('file') || undefined
 
-    if (!projectId) {
-      return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'workspaceId required' }, { status: 400 })
     }
 
-    const diffText = await gitDiff(projectId, filePath)
+    const diffText = await gitDiff(workspaceId, filePath)
     return NextResponse.json({ diff: { file: filePath || '', hunks: parseDiff(diffText) } })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

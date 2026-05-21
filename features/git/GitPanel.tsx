@@ -2,7 +2,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import { useGitStore } from '../../lib/store/gitStore'
-import { useProjectStore } from '../../lib/store/projectStore'
+import { useWorkspaceStore } from '../../lib/store/workspaceStore'
 
 export default function GitPanel() {
   const status = useGitStore(s => s.status)
@@ -11,7 +11,7 @@ export default function GitPanel() {
   const currentBranch = useGitStore(s => s.currentBranch)
   const isLoading = useGitStore(s => s.isLoading)
   const error = useGitStore(s => s.error)
-  const activeProject = useProjectStore(s => s.activeProject)
+  const activeWorkspace = useWorkspaceStore(s => s.activeWorkspace)
 
   const fetchStatus = useGitStore(s => s.fetchStatus)
   const fetchBranches = useGitStore(s => s.fetchBranches)
@@ -28,63 +28,63 @@ export default function GitPanel() {
   const [showNewBranch, setShowNewBranch] = useState(false)
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
 
-  const projectId = activeProject?.id ?? ''
+  const workspaceId = activeWorkspace?.id ?? ''
 
   const hasGit = !!(status && status.branch)
 
   useEffect(() => {
-    if (activeProject && !hasGit) {
-      void fetchStatus(projectId)
-      void fetchBranches(projectId)
+    if (activeWorkspace && !hasGit) {
+      void fetchStatus(workspaceId)
+      void fetchBranches(workspaceId)
     }
-  }, [activeProject, fetchStatus, fetchBranches, projectId, hasGit])
+  }, [activeWorkspace, fetchStatus, fetchBranches, workspaceId, hasGit])
 
   const handleCommit = useCallback(async () => {
     if (!commitMessage.trim()) return
-    const ok = await commit(projectId, commitMessage.trim())
+    const ok = await commit(workspaceId, commitMessage.trim())
     if (ok) {
       setCommitMessage('')
-      void fetchStatus(projectId)
+      void fetchStatus(workspaceId)
     }
-  }, [commitMessage, commit, projectId, fetchStatus])
+  }, [commitMessage, commit, workspaceId, fetchStatus])
 
   const handlePush = useCallback(async () => {
-    await push(projectId)
-    void fetchStatus(projectId)
-  }, [push, projectId, fetchStatus])
+    await push(workspaceId)
+    void fetchStatus(workspaceId)
+  }, [push, workspaceId, fetchStatus])
 
   const handlePull = useCallback(async () => {
-    await pull(projectId)
-    void fetchStatus(projectId)
-  }, [pull, projectId, fetchStatus])
+    await pull(workspaceId)
+    void fetchStatus(workspaceId)
+  }, [pull, workspaceId, fetchStatus])
 
   const handleCreateBranch = useCallback(async () => {
     if (!newBranchName.trim()) return
-    const ok = await createBranch(projectId, newBranchName.trim())
+    const ok = await createBranch(workspaceId, newBranchName.trim())
     if (ok) {
       setNewBranchName('')
       setShowNewBranch(false)
-      void fetchBranches(projectId)
+      void fetchBranches(workspaceId)
     }
-  }, [newBranchName, createBranch, projectId, fetchBranches])
+  }, [newBranchName, createBranch, workspaceId, fetchBranches])
 
   const handleSwitchBranch = useCallback(async (branch: string) => {
-    await checkoutBranch(projectId, branch)
-    void fetchBranches(projectId)
-    void fetchStatus(projectId)
-  }, [checkoutBranch, projectId, fetchBranches, fetchStatus])
+    await checkoutBranch(workspaceId, branch)
+    void fetchBranches(workspaceId)
+    void fetchStatus(workspaceId)
+  }, [checkoutBranch, workspaceId, fetchBranches, fetchStatus])
 
   const handleShowDiff = useCallback((filePath: string) => {
     setSelectedFile(filePath === selectedFile ? null : filePath)
     if (filePath !== selectedFile) {
-      void fetchDiff(projectId, filePath)
+      void fetchDiff(workspaceId, filePath)
     }
-  }, [selectedFile, fetchDiff, projectId])
+  }, [selectedFile, fetchDiff, workspaceId])
 
-  if (!activeProject) {
+  if (!activeWorkspace) {
     return (
       <div className="p-4 h-full flex items-center justify-center text-sm text-gray-400 bg-white">
-        プロジェクトを開いてください
+        ワークスペースを開いてください
       </div>
     )
   }

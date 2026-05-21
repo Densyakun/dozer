@@ -17,7 +17,7 @@ export type ActionResult = {
 
 export async function executeAIAction(
   action: AIFileAction,
-  projectId: string
+  workspaceId: string
 ): Promise<ActionResult> {
   switch (action.type) {
     case 'writeFile': {
@@ -42,7 +42,7 @@ export async function executeAIAction(
         store.closeFile(action.path)
 
         const ws = useFileSystemStore.getState()
-        await ws.deleteEntity(projectId, action.path)
+        await ws.deleteEntity(workspaceId, action.path)
 
         return { ok: true, message: `Deleted: ${action.path}` }
       } catch (err) {
@@ -72,11 +72,11 @@ export async function executeAIAction(
 
 export async function executeAIActions(
   actions: AIFileAction[],
-  projectId: string
+  workspaceId: string
 ): Promise<ActionResult[]> {
   const results: ActionResult[] = []
   for (const action of actions) {
-    const result = await executeAIAction(action, projectId)
+    const result = await executeAIAction(action, workspaceId)
     results.push(result)
   }
   return results

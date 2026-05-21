@@ -5,16 +5,16 @@ import { promises as fs } from 'fs'
 
 export async function POST(req: NextRequest) {
   try {
-    const { repoUrl, projectId } = await req.json()
-    if (!repoUrl || !projectId) {
-      return NextResponse.json({ error: 'repoUrl and projectId required' }, { status: 400 })
+    const { repoUrl, workspaceId } = await req.json()
+    if (!repoUrl || !workspaceId) {
+      return NextResponse.json({ error: 'repoUrl and workspaceId required' }, { status: 400 })
     }
 
-    const repoPath = getRepoPath(projectId)
+    const repoPath = getRepoPath(workspaceId)
     const exists = await fs.stat(repoPath).then(() => true).catch(() => false)
 
     if (!exists) {
-      await shallowClone(repoUrl, projectId)
+      await shallowClone(repoUrl, workspaceId)
     }
 
     return NextResponse.json({ ok: true, message: 'Repository cloned' })

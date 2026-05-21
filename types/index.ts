@@ -2,7 +2,7 @@ export type FileType = 'file' | 'directory'
 
 export type FileMeta = {
   id?: string
-  project_id?: string
+  workspace_id?: string
   path: string
   type: FileType
   size?: number
@@ -10,7 +10,7 @@ export type FileMeta = {
   updated_at?: string
 }
 
-export type Project = {
+export type Workspace = {
   id: string
   name: string
   repo_url?: string
@@ -18,21 +18,14 @@ export type Project = {
   description?: string
   owner_id?: string
   github_id?: string
-  created_at?: string
-  updated_at?: string
-  is_active?: boolean
-}
-
-export type Workspace = {
-  id: string
-  project_id: string
-  name: string
   opened_files: string[]
   active_tab?: string
   editor_state?: Record<string, unknown>
   preview_state?: Record<string, unknown>
   created_at?: string
+  updated_at?: string
   last_opened_at?: string
+  is_active?: boolean
 }
 
 export type GitStatus = {

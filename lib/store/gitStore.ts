@@ -13,15 +13,15 @@ type GitState = {
   isLoading: boolean
   error: string | null
 
-  fetchStatus: (projectId: string) => Promise<void>
-  fetchDiff: (projectId: string, filePath: string) => Promise<void>
-  fetchBranches: (projectId: string) => Promise<void>
-  commit: (projectId: string, message: string) => Promise<boolean>
-  push: (projectId: string) => Promise<boolean>
-  pull: (projectId: string) => Promise<boolean>
-  checkoutBranch: (projectId: string, branch: string) => Promise<boolean>
-  createBranch: (projectId: string, name: string) => Promise<boolean>
-  cloneRepo: (repoUrl: string, projectId: string) => Promise<boolean>
+  fetchStatus: (workspaceId: string) => Promise<void>
+  fetchDiff: (workspaceId: string, filePath: string) => Promise<void>
+  fetchBranches: (workspaceId: string) => Promise<void>
+  commit: (workspaceId: string, message: string) => Promise<boolean>
+  push: (workspaceId: string) => Promise<boolean>
+  pull: (workspaceId: string) => Promise<boolean>
+  checkoutBranch: (workspaceId: string, branch: string) => Promise<boolean>
+  createBranch: (workspaceId: string, name: string) => Promise<boolean>
+  cloneRepo: (repoUrl: string, workspaceId: string) => Promise<boolean>
   clearError: () => void
 }
 
@@ -44,42 +44,42 @@ export const useGitStore = create<GitState>()(
       isLoading: false,
       error: null,
 
-      fetchStatus: async (projectId) => {
+      fetchStatus: async (workspaceId) => {
         set({ isLoading: true, error: null })
         try {
-          const data = await api<{ status: GitStatus }>(`/api/git/status?projectId=${projectId}`)
+          const data = await api<{ status: GitStatus }>(`/api/git/status?workspaceId=${workspaceId}`)
           set({ status: data.status, isLoading: false, currentBranch: data.status.branch })
         } catch (err) {
           set({ status: null, error: String(err), isLoading: false })
         }
       },
 
-      fetchDiff: async (projectId, filePath) => {
+      fetchDiff: async (workspaceId, filePath) => {
         set({ isLoading: true, error: null })
         try {
-          const data = await api<{ diff: GitDiff }>(`/api/git/diff?projectId=${projectId}&file=${encodeURIComponent(filePath)}`)
+          const data = await api<{ diff: GitDiff }>(`/api/git/diff?workspaceId=${workspaceId}&file=${encodeURIComponent(filePath)}`)
           set({ diff: data.diff, isLoading: false })
         } catch (err) {
           set({ error: String(err), isLoading: false })
         }
       },
 
-      fetchBranches: async (projectId) => {
+      fetchBranches: async (workspaceId) => {
         try {
-          const data = await api<{ branches: string[]; current: string }>(`/api/git/branch?projectId=${projectId}`)
+          const data = await api<{ branches: string[]; current: string }>(`/api/git/branch?workspaceId=${workspaceId}`)
           set({ branches: data.branches, currentBranch: data.current })
         } catch {
           // silent
         }
       },
 
-      commit: async (projectId, message) => {
+      commit: async (workspaceId, message) => {
         set({ isLoading: true, error: null })
         try {
           await api(`/api/git/commit`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, message }),
+            body: JSON.stringify({ workspaceId, message }),
           })
           set({ isLoading: false })
           return true
@@ -89,13 +89,13 @@ export const useGitStore = create<GitState>()(
         }
       },
 
-      push: async (projectId) => {
+      push: async (workspaceId) => {
         set({ isLoading: true, error: null })
         try {
           await api(`/api/git/push`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId }),
+            body: JSON.stringify({ workspaceId }),
           })
           set({ isLoading: false })
           return true
@@ -105,13 +105,13 @@ export const useGitStore = create<GitState>()(
         }
       },
 
-      pull: async (projectId) => {
+      pull: async (workspaceId) => {
         set({ isLoading: true, error: null })
         try {
           await api(`/api/git/pull`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId }),
+            body: JSON.stringify({ workspaceId }),
           })
           set({ isLoading: false })
           return true
@@ -121,13 +121,13 @@ export const useGitStore = create<GitState>()(
         }
       },
 
-      checkoutBranch: async (projectId, branch) => {
+      checkoutBranch: async (workspaceId, branch) => {
         set({ isLoading: true, error: null })
         try {
           await api(`/api/git/branch`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, branch, action: 'checkout' }),
+            body: JSON.stringify({ workspaceId, branch, action: 'checkout' }),
           })
           set({ currentBranch: branch, isLoading: false })
           return true
@@ -137,13 +137,13 @@ export const useGitStore = create<GitState>()(
         }
       },
 
-      createBranch: async (projectId, name) => {
+      createBranch: async (workspaceId, name) => {
         set({ isLoading: true, error: null })
         try {
           await api(`/api/git/branch`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ projectId, name }),
+            body: JSON.stringify({ workspaceId, name }),
           })
           set({ isLoading: false })
           return true
@@ -153,13 +153,13 @@ export const useGitStore = create<GitState>()(
         }
       },
 
-      cloneRepo: async (repoUrl, projectId) => {
+      cloneRepo: async (repoUrl, workspaceId) => {
         set({ isLoading: true, error: null })
         try {
           await api(`/api/git/clone`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ repoUrl, projectId }),
+            body: JSON.stringify({ repoUrl, workspaceId }),
           })
           set({ isLoading: false })
           return true

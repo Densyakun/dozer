@@ -6,11 +6,10 @@ import ChatPanel from '../components/ChatPanel'
 import FileTree from '../features/filesystem/FileTree'
 import Preview from '../components/Preview'
 import Editor from '../components/Editor'
-import ProjectList from '../features/projects/ProjectList'
+import WorkspaceList from '../features/workspace/WorkspaceList'
 import GitPanel from '../features/git/GitPanel'
 import WorkspaceManager from '../features/workspace/WorkspaceManager'
 import SupabaseWarning from '../components/SupabaseWarning'
-import { useProjectStore } from '../lib/store/projectStore'
 import { useWorkspaceStore } from '../lib/store/workspaceStore'
 import { useFileSystemStore } from '../lib/store/fileSystem'
 import { useGitHubStore } from '../lib/store/gitHubStore'
@@ -19,10 +18,10 @@ import { lazyLoadFile } from '../lib/filesystem/lazyLoader'
 type EditorTab = 'edit' | 'preview'
 
 export default function Page() {
-  const [tab, setTab] = useState<MobileTab>('projects')
+  const [tab, setTab] = useState<MobileTab>('workspaces')
   const [editorTab, setEditorTab] = useState<EditorTab>('preview')
 
-  const activeProject = useProjectStore(s => s.activeProject)
+  const activeWorkspace = useWorkspaceStore(s => s.activeWorkspace)
   const workspace = useWorkspaceStore(s => s.workspace)
   const currentFile = useFileSystemStore(s => s.currentFile)
   const checkAuth = useGitHubStore(s => s.checkAuth)
@@ -35,50 +34,49 @@ export default function Page() {
 
   const handleTabChange = useCallback((newTab: MobileTab) => {
     if (newTab === 'preview' || newTab === 'files') {
-      if (!activeProject) {
-        setTab('projects')
+      if (!activeWorkspace) {
+        setTab('workspaces')
         return
       }
-      if (newTab === 'files' && activeProject) {
-        void useFileSystemStore.getState().loadTree(activeProject.id)
+      if (newTab === 'files' && activeWorkspace) {
+        void useFileSystemStore.getState().loadTree(activeWorkspace.id)
       }
     }
     setTab(newTab)
-  }, [activeProject])
+  }, [activeWorkspace])
 
   const handleSelectFile = useCallback(async (path: string) => {
-    if (!activeProject) return
-    await lazyLoadFile(activeProject.id, path)
+    if (!activeWorkspace) return
+    await lazyLoadFile(activeWorkspace.id, path)
     setTab('preview')
-  }, [activeProject])
+  }, [activeWorkspace])
 
-  // If no active project, show project list in all tabs except projects
-  const showProjectPrompt = !activeProject && tab !== 'projects'
+  // If no active workspace, show workspace list in all tabs except workspaces
+  const showWorkspacePrompt = !activeWorkspace && tab !== 'workspaces'
 
   return (
     <div className="flex flex-col min-h-screen">
       <SupabaseWarning />
       <MobileShell activeTab={tab} onTabChange={handleTabChange}>
-        {/* Project Tab */}
-        {tab === 'projects' && <ProjectList />}
+        {/* Workspace Tab */}
+        {tab === 'workspaces' && <WorkspaceList />}
 
         {/* Files Tab */}
         {tab === 'files' && (
-          showProjectPrompt ? (
+          showWorkspacePrompt ? (
             <div className="h-full flex items-center justify-center text-sm text-gray-400">
-              プロジェクトを開いてください
+              ワークスペースを開いてください
             </div>
           ) : (
             <FileTree />
           )
         )}
 
-        {/* Files Tab (tablet: side-by-side) - hidden; file tree is its own tab on mobile */}
         {/* Preview/Editor Tab */}
         {tab === 'preview' && (
-          showProjectPrompt ? (
+          showWorkspacePrompt ? (
             <div className="h-full flex items-center justify-center text-sm text-gray-400">
-              プロジェクトを開いてください
+              ワークスペースを開いてください
             </div>
           ) : (
             <div className="h-full flex flex-col min-h-0">
@@ -108,9 +106,9 @@ export default function Page() {
 
         {/* Agent Tab */}
         {tab === 'agent' && (
-          activeProject ? <ChatPanel /> : (
+          activeWorkspace ? <ChatPanel /> : (
             <div className="h-full flex items-center justify-center text-sm text-gray-400">
-              プロジェクトを開いてください
+              ワークスペースを開いてください
             </div>
           )
         )}

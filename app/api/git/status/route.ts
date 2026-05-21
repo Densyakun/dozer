@@ -4,12 +4,12 @@ import { getGitStatus } from '../../../../lib/git/server'
 
 export async function GET(req: NextRequest) {
   try {
-    const projectId = req.nextUrl.searchParams.get('projectId')
-    if (!projectId) {
-      return NextResponse.json({ error: 'projectId required' }, { status: 400 })
+    const workspaceId = req.nextUrl.searchParams.get('workspaceId')
+    if (!workspaceId) {
+      return NextResponse.json({ error: 'workspaceId required' }, { status: 400 })
     }
 
-    const status = await getGitStatus(projectId)
+    const status = await getGitStatus(workspaceId)
     return NextResponse.json({ status })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })

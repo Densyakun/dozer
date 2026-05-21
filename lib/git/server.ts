@@ -7,16 +7,16 @@ import {
 
 const MIRROR_ROOT = process.env.GIT_MIRROR_ROOT || path.join(process.cwd(), '.git-mirror')
 
-export function getRepoPath(projectId: string): string {
-  return path.join(MIRROR_ROOT, projectId)
+export function getRepoPath(workspaceId: string): string {
+  return path.join(MIRROR_ROOT, workspaceId)
 }
 
 export async function ensureMirrorDir(): Promise<void> {
   await fs.mkdir(MIRROR_ROOT, { recursive: true })
 }
 
-export async function shallowClone(repoUrl: string, projectId: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function shallowClone(repoUrl: string, workspaceId: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   await ensureMirrorDir()
 
   const { execSync } = await import('child_process')
@@ -26,8 +26,8 @@ export async function shallowClone(repoUrl: string, projectId: string): Promise<
   })
 }
 
-export async function getGitStatus(projectId: string) {
-  const repoPath = getRepoPath(projectId)
+export async function getGitStatus(workspaceId: string) {
+  const repoPath = getRepoPath(workspaceId)
   const gitDir = path.join(repoPath, '.git')
 
   try {
@@ -78,8 +78,8 @@ export async function getGitStatus(projectId: string) {
   }
 }
 
-export async function gitCommit(projectId: string, message: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function gitCommit(workspaceId: string, message: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
 
   execSync(`git -C "${repoPath}" add -A`, { stdio: 'pipe', timeout: 30_000 })
@@ -89,32 +89,32 @@ export async function gitCommit(projectId: string, message: string): Promise<voi
   })
 }
 
-export async function gitPush(projectId: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function gitPush(workspaceId: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
   execSync(`git -C "${repoPath}" push`, { stdio: 'pipe', timeout: 60_000 })
 }
 
-export async function gitPull(projectId: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function gitPull(workspaceId: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
   execSync(`git -C "${repoPath}" pull --rebase`, { stdio: 'pipe', timeout: 60_000 })
 }
 
-export async function gitCheckout(projectId: string, branch: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function gitCheckout(workspaceId: string, branch: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
   execSync(`git -C "${repoPath}" checkout "${branch}"`, { stdio: 'pipe', timeout: 30_000 })
 }
 
-export async function gitCreateBranch(projectId: string, name: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function gitCreateBranch(workspaceId: string, name: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
   execSync(`git -C "${repoPath}" checkout -b "${name}"`, { stdio: 'pipe', timeout: 30_000 })
 }
 
-export async function gitBranches(projectId: string): Promise<{ branches: string[]; current: string }> {
-  const repoPath = getRepoPath(projectId)
+export async function gitBranches(workspaceId: string): Promise<{ branches: string[]; current: string }> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
 
   const current = execSync(`git -C "${repoPath}" branch --show-current`, {
@@ -128,8 +128,8 @@ export async function gitBranches(projectId: string): Promise<{ branches: string
   return { branches: list, current }
 }
 
-export async function gitDiff(projectId: string, filePath?: string): Promise<string> {
-  const repoPath = getRepoPath(projectId)
+export async function gitDiff(workspaceId: string, filePath?: string): Promise<string> {
+  const repoPath = getRepoPath(workspaceId)
   const { execSync } = await import('child_process')
 
   const fileArg = filePath ? ` -- "${filePath.replace(/"/g, '\\"')}"` : ''
@@ -139,45 +139,45 @@ export async function gitDiff(projectId: string, filePath?: string): Promise<str
   return diff
 }
 
-export async function readFileContent(projectId: string, filePath: string): Promise<string> {
+export async function readFileContent(workspaceId: string, filePath: string): Promise<string> {
   if (!shouldExclude(filePath) && supabase) {
-    const result = await downloadFile(projectId, filePath)
+    const result = await downloadFile(workspaceId, filePath)
     if (result.ok && result.content) {
       return result.content
     }
   }
 
-  const repoPath = getRepoPath(projectId)
+  const repoPath = getRepoPath(workspaceId)
   const fullPath = path.join(repoPath, filePath)
   return await fs.readFile(fullPath, 'utf-8')
 }
 
-export async function writeFileContent(projectId: string, filePath: string, content: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function writeFileContent(workspaceId: string, filePath: string, content: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const fullPath = path.join(repoPath, filePath)
   await fs.mkdir(path.dirname(fullPath), { recursive: true })
   await fs.writeFile(fullPath, content, 'utf-8')
 
   if (!shouldExclude(filePath) && supabase) {
-    const result = await uploadFile(projectId, filePath, content)
+    const result = await uploadFile(workspaceId, filePath, content)
     if (!result.ok && result.error !== 'Supabase not connected') {
       console.warn(`Failed to sync to Supabase: ${result.error}`)
     }
   }
 }
 
-export async function deleteFileEntry(projectId: string, filePath: string): Promise<void> {
-  const repoPath = getRepoPath(projectId)
+export async function deleteFileEntry(workspaceId: string, filePath: string): Promise<void> {
+  const repoPath = getRepoPath(workspaceId)
   const fullPath = path.join(repoPath, filePath)
   await fs.rm(fullPath, { recursive: true, force: true })
 
   if (!shouldExclude(filePath) && supabase) {
-    await deleteFile(projectId, filePath)
+    await deleteFile(workspaceId, filePath)
   }
 }
 
-export async function listFiles(projectId: string): Promise<{ path: string; type: 'file' | 'directory'; size: number }[]> {
-  const repoPath = getRepoPath(projectId)
+export async function listFiles(workspaceId: string): Promise<{ path: string; type: 'file' | 'directory'; size: number }[]> {
+  const repoPath = getRepoPath(workspaceId)
   const result: { path: string; type: 'file' | 'directory'; size: number }[] = []
 
   async function walk(dir: string, relativePath: string): Promise<void> {

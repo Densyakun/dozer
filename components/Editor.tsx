@@ -3,19 +3,19 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { useFileSystemStore } from '../lib/store/fileSystem'
 import { lazyLoadFile } from '../lib/filesystem/lazyLoader'
-import { useProjectStore } from '../lib/store/projectStore'
+import { useWorkspaceStore } from '../lib/store/workspaceStore'
 
 export default function Editor() {
   const currentFile = useFileSystemStore(s => s.currentFile)
   const fileContents = useFileSystemStore(s => s.fileContents)
   const updateFileContent = useFileSystemStore(s => s.updateFileContent)
-  const activeProject = useProjectStore(s => s.activeProject)
+  const activeWorkspace = useWorkspaceStore(s => s.activeWorkspace)
 
   const [localContent, setLocalContent] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-  const projectId = activeProject?.id ?? '1'
+  const workspaceId = activeWorkspace?.id ?? '1'
 
   useEffect(() => {
     if (currentFile) {
@@ -25,13 +25,13 @@ export default function Editor() {
         setHasUnsavedChanges(false)
       } else {
         setLocalContent('')
-        void lazyLoadFile(projectId, currentFile)
+        void lazyLoadFile(workspaceId, currentFile)
       }
     } else {
       setLocalContent('')
     }
     setIsEditing(false)
-  }, [currentFile, fileContents, projectId])
+  }, [currentFile, fileContents, workspaceId])
 
   useEffect(() => {
     if (currentFile) {

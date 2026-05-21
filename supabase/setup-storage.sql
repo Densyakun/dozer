@@ -1,6 +1,6 @@
 -- Supabase Storage Setup for Dozer
 -- Run this in the Supabase SQL editor to set up the git-mirror storage bucket
--- and the project_files metadata table.
+-- and the workspace_files metadata table.
 
 -- 1. Create the storage bucket (via storage API)
 -- Note: In Supabase SQL editor, use:
@@ -13,54 +13,54 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 2. RLS policies for the git-mirror bucket
 
--- Allow users to read their own project files
-CREATE POLICY "Users can read their own project files"
+-- Allow users to read their own workspace files
+CREATE POLICY "Users can read their own workspace files"
 ON storage.objects FOR SELECT
 TO authenticated
 USING (
   bucket_id = 'git-mirror'
   AND (storage.foldername(name))[1] IN (
-    SELECT id::text FROM projects WHERE owner_id = auth.uid()::text
+    SELECT id::text FROM workspaces WHERE owner_id = auth.uid()::text
   )
 );
 
--- Allow users to upload files to their own projects
-CREATE POLICY "Users can upload to their own projects"
+-- Allow users to upload files to their own workspaces
+CREATE POLICY "Users can upload to their own workspaces"
 ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'git-mirror'
   AND (storage.foldername(name))[1] IN (
-    SELECT id::text FROM projects WHERE owner_id = auth.uid()::text
+    SELECT id::text FROM workspaces WHERE owner_id = auth.uid()::text
   )
 );
 
--- Allow users to update files in their own projects
-CREATE POLICY "Users can update their own project files"
+-- Allow users to update files in their own workspaces
+CREATE POLICY "Users can update their own workspace files"
 ON storage.objects FOR UPDATE
 TO authenticated
 USING (
   bucket_id = 'git-mirror'
   AND (storage.foldername(name))[1] IN (
-    SELECT id::text FROM projects WHERE owner_id = auth.uid()::text
+    SELECT id::text FROM workspaces WHERE owner_id = auth.uid()::text
   )
 );
 
--- Allow users to delete files from their own projects
-CREATE POLICY "Users can delete their own project files"
+-- Allow users to delete files from their own workspaces
+CREATE POLICY "Users can delete their own workspace files"
 ON storage.objects FOR DELETE
 TO authenticated
 USING (
   bucket_id = 'git-mirror'
   AND (storage.foldername(name))[1] IN (
-    SELECT id::text FROM projects WHERE owner_id = auth.uid()::text
+    SELECT id::text FROM workspaces WHERE owner_id = auth.uid()::text
   )
 );
 
--- 3. project_files metadata table
-CREATE TABLE IF NOT EXISTS project_files (
+-- 3. workspace_files metadata table
+CREATE TABLE IF NOT EXISTS workspace_files (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES projects(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
   path TEXT NOT NULL,
   type TEXT NOT NULL CHECK (type IN ('file', 'directory')),
   size BIGINT DEFAULT 0,
@@ -68,8 +68,8 @@ CREATE TABLE IF NOT EXISTS project_files (
   is_excluded BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(project_id, path)
+  UNIQUE(workspace_id, path)
 );
 
-CREATE INDEX IF NOT EXISTS idx_project_files_project ON project_files(project_id);
-CREATE INDEX IF NOT EXISTS idx_project_files_path ON project_files(project_id, path);
+CREATE INDEX IF NOT EXISTS idx_workspace_files_workspace ON workspace_files(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_workspace_files_path ON workspace_files(workspace_id, path);
