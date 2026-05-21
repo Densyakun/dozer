@@ -11,3 +11,7 @@ if (!url || !anonKey) {
 
 export const supabase: SupabaseClient | null =
   url && anonKey ? createClient(url, anonKey) : null
+
+export function isSupabaseConnected(): boolean {
+  return supabase !== null
+}

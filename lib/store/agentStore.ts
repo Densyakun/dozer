@@ -22,10 +22,11 @@ export type AgentState = {
   status: 'idle' | 'thinking' | 'executing' | 'error'
   isConnected: boolean
   model: string
-  
+  isConfigMode: boolean
+
   addMessage: (msg: Omit<AgentMessage, 'id' | 'timestamp'>) => void
   setStatus: (status: AgentState['status']) => void
-  setConnected: (connected: boolean, model?: string) => void
+  setConnected: (connected: boolean, model?: string, isConfigMode?: boolean) => void
   clearMessages: () => void
 }
 
@@ -34,7 +35,8 @@ export const useAgentStore = create<AgentState>((set) => ({
   status: 'idle',
   isConnected: false,
   model: 'unknown',
-  
+  isConfigMode: false,
+
   addMessage: (msg) => set((state) => ({
     messages: [...state.messages, {
       ...msg,
@@ -42,13 +44,14 @@ export const useAgentStore = create<AgentState>((set) => ({
       timestamp: Date.now(),
     }]
   })),
-  
+
   setStatus: (status) => set({ status }),
-  
-  setConnected: (connected, model) => set({ 
-    isConnected: connected, 
-    model: model ?? 'unknown' 
+
+  setConnected: (connected, model, isConfigMode) => set({
+    isConnected: connected,
+    model: model ?? 'unknown',
+    isConfigMode: isConfigMode ?? false,
   }),
-  
+
   clearMessages: () => set({ messages: [] }),
 }))

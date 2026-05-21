@@ -1,64 +1,247 @@
 'use client'
 
 import { create } from 'zustand'
+import { persist, createJSONStorage } from 'zustand/middleware'
+import { idbStorage } from './idbStorage'
+import type { FileTreeNode, FileMeta } from '../../types'
 
-export type FileEntry = {
-  path: string
-  content: string
-  type: 'file' | 'directory'
-}
-
-export type FileSystemState = {
-  files: Map<string, FileEntry>
+type FileSystemState = {
+  tree: FileTreeNode[]
+  files: Map<string, FileMeta>
+  openFiles: string[]
   currentFile: string | null
+  fileContents: Map<string, string>
+  isLoading: boolean
+  error: string | null
+
+  setTree: (tree: FileTreeNode[]) => void
+  loadTree: (projectId: string) => Promise<void>
+  loadFileContent: (projectId: string, path: string) => Promise<string | null>
+  getFileContent: (path: string) => string | undefined
   setCurrentFile: (path: string | null) => void
-  updateFile: (path: string, content: string) => void
-  createFile: (path: string, content?: string) => void
-  deleteFile: (path: string) => void
-  getFile: (path: string) => FileEntry | undefined
-  getAllFiles: () => FileEntry[]
+  openFile: (path: string) => void
+  closeFile: (path: string) => void
+  updateFileContent: (path: string, content: string) => void
+  createFile: (projectId: string, path: string, content?: string) => Promise<boolean>
+  createFolder: (projectId: string, path: string) => Promise<boolean>
+  renameFile: (projectId: string, oldPath: string, newPath: string) => Promise<boolean>
+  deleteEntity: (projectId: string, path: string) => Promise<boolean>
+  clearCache: () => void
 }
 
-const DEMO_FILES: FileEntry[] = [
-  { path: '/src/App.tsx', content: 'export default function App() {\n  return (\n    <div className="p-4">\n      <h1 className="text-2xl font-bold">Hello Dozer</h1>\n      <p className="mt-2">AI駆動開発へようこそ</p>\n    </div>\n  )\n}', type: 'file' },
-  { path: '/src/index.tsx', content: 'import React from "react"\nimport ReactDOM from "react-dom/client"\nimport App from "./App"\n\nconst root = ReactDOM.createRoot(document.getElementById("root")!)\nroot.render(<App />)', type: 'file' },
-  { path: '/src/components/Hello.tsx', content: 'export default function Hello() {\n  return <div className="text-blue-500">Hello Component</div>\n}', type: 'file' },
-  { path: '/package.json', content: '{\n  "name": "my-app",\n  "version": "1.0.0",\n  "dependencies": {\n    "react": "^18.2.0",\n    "react-dom": "^18.2.0"\n  }\n}', type: 'file' },
-]
+async function api<T>(url: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(url, options)
+  if (!res.ok) {
+    const err = await res.text().catch(() => '')
+    throw new Error(err.slice(0, 200))
+  }
+  return res.json() as Promise<T>
+}
 
-export const useFileSystemStore = create<FileSystemState>((set, get) => ({
-  files: new Map(DEMO_FILES.map(f => [f.path, f])),
-  currentFile: '/src/App.tsx',
-  
-  setCurrentFile: (path) => set({ currentFile: path }),
-  
-  updateFile: (path, content) => set((state) => {
-    const newFiles = new Map(state.files)
-    const existing = newFiles.get(path)
-    if (existing) {
-      newFiles.set(path, { ...existing, content })
+function buildTree(metas: FileMeta[]): FileTreeNode[] {
+  const root: FileTreeNode[] = []
+  const map = new Map<string, FileTreeNode>()
+
+  const ignoreDirs = new Set(['node_modules', '.git', '.next', 'dist', 'build'])
+
+  for (const meta of metas) {
+    if (meta.path === '/') continue
+    const parts = meta.path.split('/').filter(Boolean)
+    if (parts.length === 0) continue
+    if (ignoreDirs.has(parts[0])) continue
+
+    let currentPath = ''
+    for (let i = 0; i < parts.length; i++) {
+      const isLast = i === parts.length - 1
+      currentPath += '/' + parts[i]
+
+      if (isLast && meta.type === 'file') {
+        if (!map.has(currentPath)) {
+          const node: FileTreeNode = {
+            path: currentPath,
+            name: parts[i],
+            type: 'file',
+            children: [],
+            size: meta.size,
+          }
+          map.set(currentPath, node)
+        }
+      } else if (!map.has(currentPath)) {
+        const node: FileTreeNode = {
+          path: currentPath,
+          name: parts[i],
+          type: 'directory',
+          children: [],
+          expanded: false,
+        }
+        map.set(currentPath, node)
+      }
+    }
+  }
+
+  for (const node of map.values()) {
+    const parentPath = '/' + node.path.split('/').slice(1, -1).join('/')
+    if (parentPath === '/') {
+      root.push(node)
     } else {
-      newFiles.set(path, { path, content, type: 'file' })
+      const parent = map.get(parentPath)
+      if (parent && parent.type === 'directory') {
+        parent.children.push(node)
+      } else {
+        root.push(node)
+      }
     }
-    return { files: newFiles }
-  }),
-  
-  createFile: (path, content = '') => set((state) => {
-    const newFiles = new Map(state.files)
-    newFiles.set(path, { path, content, type: 'file' })
-    return { files: newFiles }
-  }),
-  
-  deleteFile: (path) => set((state) => {
-    const newFiles = new Map(state.files)
-    newFiles.delete(path)
-    return { 
-      files: newFiles,
-      currentFile: state.currentFile === path ? null : state.currentFile
+  }
+
+  const sortNodes = (nodes: FileTreeNode[]) => {
+    nodes.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    for (const n of nodes) {
+      if (n.children.length > 0) sortNodes(n.children)
     }
-  }),
-  
-  getFile: (path) => get().files.get(path),
-  
-  getAllFiles: () => Array.from(get().files.values()),
-}))
+  }
+  sortNodes(root)
+
+  return root
+}
+
+export const useFileSystemStore = create<FileSystemState>()(
+  persist(
+    (set, get) => ({
+      tree: [],
+      files: new Map(),
+      openFiles: [],
+      currentFile: null,
+      fileContents: new Map(),
+      isLoading: false,
+      error: null,
+
+      setTree: (tree) => set({ tree }),
+
+      loadTree: async (projectId) => {
+        set({ isLoading: true, error: null })
+        try {
+          const data = await api<{ files: FileMeta[] }>(`/api/files?projectId=${projectId}`)
+          const files = new Map(data.files.map(f => [f.path, f]))
+          const tree = buildTree(data.files)
+          set({ tree, files, isLoading: false })
+        } catch (err) {
+          set({ error: String(err), isLoading: false })
+        }
+      },
+
+      loadFileContent: async (projectId, path) => {
+        try {
+          const data = await api<{ content: string }>(`/api/files/content?projectId=${projectId}&path=${encodeURIComponent(path)}`)
+          set(s => {
+            const newContents = new Map(s.fileContents)
+            newContents.set(path, data.content)
+            return { fileContents: newContents }
+          })
+          return data.content
+        } catch {
+          return null
+        }
+      },
+
+      getFileContent: (path) => get().fileContents.get(path),
+
+      setCurrentFile: (path) => set({ currentFile: path }),
+
+      openFile: (path) => {
+        const { openFiles } = get()
+        if (!openFiles.includes(path)) {
+          set({ openFiles: [...openFiles, path] })
+        }
+        set({ currentFile: path })
+      },
+
+      closeFile: (path) => {
+        const { openFiles, currentFile } = get()
+        const newOpenFiles = openFiles.filter(f => f !== path)
+        set({
+          openFiles: newOpenFiles,
+          currentFile: currentFile === path ? (newOpenFiles[0] ?? null) : currentFile,
+        })
+      },
+
+      updateFileContent: (path, content) => {
+        set(s => {
+          const newContents = new Map(s.fileContents)
+          newContents.set(path, content)
+          return { fileContents: newContents }
+        })
+      },
+
+      createFile: async (projectId, path, content = '') => {
+        try {
+          await api('/api/files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, path, content, type: 'file' }),
+          })
+          await get().loadTree(projectId)
+          return true
+        } catch {
+          return false
+        }
+      },
+
+      createFolder: async (projectId, path) => {
+        try {
+          await api('/api/files', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, path: path + '/.gitkeep', content: '', type: 'directory' }),
+          })
+          await get().loadTree(projectId)
+          return true
+        } catch {
+          return false
+        }
+      },
+
+      renameFile: async (projectId, oldPath, newPath) => {
+        try {
+          await api('/api/files', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ projectId, oldPath, newPath }),
+          })
+          await get().loadTree(projectId)
+          return true
+        } catch {
+          return false
+        }
+      },
+
+      deleteEntity: async (projectId, path) => {
+        try {
+          await api(`/api/files?projectId=${projectId}&path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+          set(s => {
+            const newContents = new Map(s.fileContents)
+            newContents.delete(path)
+            return { fileContents: newContents }
+          })
+          await get().loadTree(projectId)
+          return true
+        } catch {
+          return false
+        }
+      },
+
+      clearCache: () => set({ fileContents: new Map(), openFiles: [], currentFile: null }),
+    }),
+    {
+      name: 'file-system-store',
+      storage: createJSONStorage(() => idbStorage),
+      partialize: (state) => ({
+        tree: state.tree,
+        openFiles: state.openFiles,
+        currentFile: state.currentFile,
+      }) as FileSystemState,
+    }
+  )
+)

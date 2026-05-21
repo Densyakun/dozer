@@ -5,12 +5,14 @@ import { runAgent } from '../../../lib/agent/runAgent'
 import type { AgentStatus } from '../../../lib/agent/types'
 
 function agentStatus(): AgentStatus {
-  const { connected, model } = getPortKeyConfig()
+  const config = getPortKeyConfig()
+  const { connected, model, configId } = config
   if (connected) {
     return {
       ok: true,
       connected: true,
       provider: 'portkey',
+      configId,
       model,
       status: 'ready',
     }
@@ -49,7 +51,7 @@ export async function POST(req: NextRequest) {
         ok: false,
         connected: getPortKeyConfig().connected,
         error: message,
-        action: { type: 'message', text: `エラー: ${message}` },
+        action: { type: 'message', text: `Error: ${message}` },
       },
       { status: 502 }
     )

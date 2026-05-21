@@ -1,7 +1,13 @@
 'use client'
 
 import { supabase } from '../lib/supabaseClient'
-import { useFileSystemStore, type FileEntry } from '../lib/store/fileSystem'
+import { useFileSystemStore } from '../lib/store/fileSystem'
+
+type FileEntry = {
+  path: string
+  content: string
+  type?: string
+}
 
 export type FileChange = {
   id: string
@@ -29,19 +35,19 @@ export function subscribeFiles(
     }
     return stubChannel
   }
-  
+
   if (currentChannel) {
     currentChannel.unsubscribe()
   }
-  
+
   const channel = supabase.channel('files-channel')
-  
+  const client = supabase
+
   channel
     .on('broadcast', { event: 'file-change' }, (payload) => {
       const change = payload.payload as FileChange
       onFileChange?.(change)
-      
-      useFileSystemStore.getState().updateFile(change.path, change.content)
+      useFileSystemStore.getState().updateFileContent(change.path, change.content)
     })
     .subscribe((status) => {
       if (status === 'SUBSCRIBED') {
@@ -50,10 +56,10 @@ export function subscribeFiles(
         onError?.(new Error('Channel subscription failed'))
       }
     })
-  
+
   currentChannel = {
     unsubscribe: () => {
-      void supabase.removeChannel(channel)
+      client.removeChannel(channel)
       currentChannel = null
     },
     send: async (event, payload) => {
@@ -64,20 +70,20 @@ export function subscribeFiles(
       })
     },
   }
-  
+
   return currentChannel
 }
 
 export async function broadcastFileChange(file: FileEntry): Promise<void> {
   if (!currentChannel) return
-  
+
   const change: FileChange = {
     id: crypto.randomUUID(),
     path: file.path,
     content: file.content,
     timestamp: Date.now(),
   }
-  
+
   await currentChannel.send('file-change', change)
 }
 

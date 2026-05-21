@@ -4,12 +4,18 @@ export type WriteFileAction = {
   content: string
 }
 
+export type DeleteFileAction = {
+  type: 'deleteFile'
+  path: string
+}
+
 export type RunCommandAction = {
   type: 'runCommand'
   command: string
+  args?: string[]
 }
 
-export type AgentAction = WriteFileAction | RunCommandAction
+export type AgentAction = WriteFileAction | DeleteFileAction | RunCommandAction
 
 export type AgentResult = {
   message: string
@@ -21,6 +27,7 @@ export type AgentStatus = {
   connected: boolean
   provider: 'portkey' | 'mock'
   model?: string
+  configId?: string
   status: string
   hint?: string
 }

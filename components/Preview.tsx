@@ -14,30 +14,30 @@ export default function Preview() {
   const setLoading = usePreviewStore(s => s.setLoading)
   const error = usePreviewStore(s => s.error)
   const setError = usePreviewStore(s => s.setError)
-  
+
   const currentFile = useFileSystemStore(s => s.currentFile)
-  const getFile = useFileSystemStore(s => s.getFile)
-  
+  const fileContents = useFileSystemStore(s => s.fileContents)
+
   const [srcDoc, setSrcDoc] = useState(html)
-  
-  const runPreview = useCallback(async () => {
+
+  const runPreview = useCallback(() => {
     if (!currentFile) {
       setError('ファイルを選択してください')
       return
     }
-    
-    const file = getFile(currentFile)
-    if (!file) {
+
+    const content = fileContents.get(currentFile)
+    if (content === undefined) {
       setError('ファイルが見つかりません')
       return
     }
-    
+
     setLoading(true)
     setError(null)
-    
+
     try {
       if (mode === 'light') {
-        const result = safeRenderTsx(file.content)
+        const result = safeRenderTsx(content)
         if (result.ok && result.html) {
           setSrcDoc(result.html)
           setHtml(result.html)
@@ -52,18 +52,18 @@ export default function Preview() {
     } finally {
       setLoading(false)
     }
-  }, [currentFile, getFile, mode, setError, setHtml, setLoading])
-  
+  }, [currentFile, fileContents, mode, setError, setHtml, setLoading])
+
   useEffect(() => {
     if (currentFile) {
-      void runPreview()
+      runPreview()
     }
   }, [currentFile, runPreview])
-  
+
   useEffect(() => {
     setSrcDoc(html)
   }, [html])
-  
+
   return (
     <div className="h-full min-h-0 flex flex-col">
       <div className="p-2 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
@@ -83,7 +83,7 @@ export default function Preview() {
           </button>
           <button
             type="button"
-            onClick={() => void runPreview()}
+            onClick={() => runPreview()}
             disabled={isLoading}
             className="px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
           >
@@ -91,13 +91,13 @@ export default function Preview() {
           </button>
         </div>
       </div>
-      
+
       {error && (
         <div className="mx-2 mt-2 p-2 bg-red-50 text-red-700 text-xs rounded border border-red-200">
           {error}
         </div>
       )}
-      
+
       <div className="flex-1 min-h-0 bg-white m-2 rounded-lg shadow-sm border border-gray-100 overflow-hidden">
         <iframe
           title="preview"

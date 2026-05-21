@@ -15,6 +15,8 @@ function parseAgentJson(raw: string): AgentResult {
       const a = item as Record<string, unknown>
       if (a.type === 'writeFile' && typeof a.path === 'string' && typeof a.content === 'string') {
         actions.push({ type: 'writeFile', path: a.path, content: a.content })
+      } else if (a.type === 'deleteFile' && typeof a.path === 'string') {
+        actions.push({ type: 'deleteFile', path: a.path })
       } else if (a.type === 'runCommand' && typeof a.command === 'string') {
         actions.push({ type: 'runCommand', command: a.command })
       }

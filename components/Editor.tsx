@@ -2,41 +2,58 @@
 
 import React, { useCallback, useEffect, useState } from 'react'
 import { useFileSystemStore } from '../lib/store/fileSystem'
+import { lazyLoadFile } from '../lib/filesystem/lazyLoader'
+import { useProjectStore } from '../lib/store/projectStore'
 
 export default function Editor() {
   const currentFile = useFileSystemStore(s => s.currentFile)
-  const getFile = useFileSystemStore(s => s.getFile)
-  const updateFile = useFileSystemStore(s => s.updateFile)
-  
-  const [content, setContent] = useState('')
+  const fileContents = useFileSystemStore(s => s.fileContents)
+  const updateFileContent = useFileSystemStore(s => s.updateFileContent)
+  const activeProject = useProjectStore(s => s.activeProject)
+
+  const [localContent, setLocalContent] = useState('')
   const [isEditing, setIsEditing] = useState(false)
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
-  
+
+  const projectId = activeProject?.id ?? '1'
+
   useEffect(() => {
     if (currentFile) {
-      const file = getFile(currentFile)
-      if (file) {
-        setContent(file.content)
+      const cached = fileContents.get(currentFile)
+      if (cached !== undefined) {
+        setLocalContent(cached)
         setHasUnsavedChanges(false)
+      } else {
+        setLocalContent('')
+        void lazyLoadFile(projectId, currentFile)
       }
     } else {
-      setContent('')
+      setLocalContent('')
     }
     setIsEditing(false)
-  }, [currentFile, getFile])
-  
+  }, [currentFile, fileContents, projectId])
+
+  useEffect(() => {
+    if (currentFile) {
+      const cached = fileContents.get(currentFile)
+      if (cached !== undefined && cached !== localContent && !isEditing) {
+        setLocalContent(cached)
+        setHasUnsavedChanges(false)
+      }
+    }
+  }, [fileContents, currentFile, isEditing, localContent])
+
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value
-    setContent(newContent)
+    setLocalContent(newContent)
     setHasUnsavedChanges(true)
-    
     if (currentFile) {
-      updateFile(currentFile, newContent)
+      updateFileContent(currentFile, newContent)
     }
-  }, [currentFile, updateFile])
-  
-  const fileName = currentFile ? currentFile.split('/').pop() : ''
-  
+  }, [currentFile, updateFileContent])
+
+  const fileName = currentFile?.split('/').pop() ?? ''
+
   if (!currentFile) {
     return (
       <div className="h-full flex items-center justify-center bg-gray-50">
@@ -44,7 +61,7 @@ export default function Editor() {
       </div>
     )
   }
-  
+
   return (
     <div className="h-full flex flex-col bg-white">
       <div className="p-2 flex items-center justify-between border-b border-gray-200 shrink-0 bg-gray-50">
@@ -55,13 +72,13 @@ export default function Editor() {
           )}
         </div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span>{content.split('\n').length} 行</span>
-          <span>{(new Blob([content]).size / 1024).toFixed(1)} KB</span>
+          <span>{localContent.split('\n').length} 行</span>
+          <span>{(new Blob([localContent]).size / 1024).toFixed(1)} KB</span>
         </div>
       </div>
       <div className="flex-1 min-h-0">
         <textarea
-          value={content}
+          value={localContent}
           onChange={handleChange}
           onFocus={() => setIsEditing(true)}
           onBlur={() => setIsEditing(false)}
