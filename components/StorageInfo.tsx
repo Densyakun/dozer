@@ -30,7 +30,7 @@ export default function StorageInfo() {
 
           <div className="flex items-start gap-2">
             <span className="text-green-500 font-mono shrink-0">Supabase</span>
-            <span>→ git ミラーファイルの内容、ファイルメタデータ</span>
+            <span>→ ワークスペースファイルの内容、ファイルメタデータ</span>
           </div>
 
           <div className="flex items-start gap-2">
@@ -40,7 +40,7 @@ export default function StorageInfo() {
 
           <div className="flex items-start gap-2">
             <span className="text-gray-400 font-mono shrink-0">除外</span>
-            <span>→ node_modules, .git ディレクトリ（Supabase 非保存）</span>
+            <span>→ node_modules（Supabase 非保存）</span>
           </div>
         </div>
       )}

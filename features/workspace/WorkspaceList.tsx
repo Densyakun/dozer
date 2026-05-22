@@ -33,6 +33,8 @@ export default function WorkspaceList() {
   const [newRepoUrl, setNewRepoUrl] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [selectedRepo, setSelectedRepo] = useState('')
+  const [creating, setCreating] = useState(false)
+
 
   useEffect(() => {
     void loadWorkspaces()
@@ -55,21 +57,26 @@ export default function WorkspaceList() {
   }, [clearCache, closeWorkspace])
 
   const handleCreateWorkspace = useCallback(async () => {
-    if (!newName.trim()) return
-    const repoUrl = selectedRepo || newRepoUrl.trim() || undefined
-    const workspace = await createWorkspace(newName.trim(), repoUrl, newDescription.trim() || undefined)
-    if (workspace && repoUrl) {
-      await cloneRepo(repoUrl, workspace.id)
+    if (!newName.trim() || creating) return
+    setCreating(true)
+    try {
+      const repoUrl = selectedRepo || newRepoUrl.trim() || undefined
+      const workspace = await createWorkspace(newName.trim(), repoUrl, newDescription.trim() || undefined)
+      if (workspace && repoUrl) {
+        await cloneRepo(repoUrl, workspace.id)
+      }
+      if (workspace) {
+        await handleOpenWorkspace(workspace)
+      }
+      setShowNew(false)
+      setNewName('')
+      setNewRepoUrl('')
+      setNewDescription('')
+      setSelectedRepo('')
+    } finally {
+      setCreating(false)
     }
-    if (workspace) {
-      await handleOpenWorkspace(workspace)
-    }
-    setShowNew(false)
-    setNewName('')
-    setNewRepoUrl('')
-    setNewDescription('')
-    setSelectedRepo('')
-  }, [newName, newRepoUrl, newDescription, selectedRepo, createWorkspace, cloneRepo, handleOpenWorkspace])
+  }, [newName, newRepoUrl, newDescription, selectedRepo, createWorkspace, cloneRepo, handleOpenWorkspace, creating])
 
   return (
     <div className="p-4 h-full overflow-auto bg-white">
@@ -152,10 +159,10 @@ export default function WorkspaceList() {
               <button
                 type="button"
                 onClick={() => void handleCreateWorkspace()}
-                disabled={!newName.trim()}
+                disabled={!newName.trim() || creating}
                 className="flex-1 p-2 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
               >
-                作成
+                {creating ? '作成中...' : '作成'}
               </button>
               <button
                 type="button"

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { listFiles } from '../../../lib/git/server'
+import { listFiles, readFileContent, writeFileContent, deleteFileEntry } from '../../../lib/git/server'
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,7 +23,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'workspaceId and path required' }, { status: 400 })
     }
 
-    const { writeFileContent } = await import('../../../lib/git/server')
     await writeFileContent(workspaceId, path.startsWith('/') ? path.slice(1) : path, content || '')
     return NextResponse.json({ ok: true })
   } catch (err) {
@@ -38,15 +37,12 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'workspaceId, oldPath, newPath required' }, { status: 400 })
     }
 
-    const { promises: fs } = await import('fs')
-    const path = await import('path')
-    const { getRepoPath } = await import('../../../lib/git/server')
-
-    const repoPath = getRepoPath(workspaceId)
     const cleanOld = oldPath.startsWith('/') ? oldPath.slice(1) : oldPath
     const cleanNew = newPath.startsWith('/') ? newPath.slice(1) : newPath
 
-    await fs.rename(path.join(repoPath, cleanOld), path.join(repoPath, cleanNew))
+    const content = await readFileContent(workspaceId, cleanOld)
+    await writeFileContent(workspaceId, cleanNew, content)
+    await deleteFileEntry(workspaceId, cleanOld)
     return NextResponse.json({ ok: true })
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 })
@@ -62,7 +58,6 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: 'workspaceId and path required' }, { status: 400 })
     }
 
-    const { deleteFileEntry } = await import('../../../lib/git/server')
     await deleteFileEntry(workspaceId, filePath.startsWith('/') ? filePath.slice(1) : filePath)
     return NextResponse.json({ ok: true })
   } catch (err) {
