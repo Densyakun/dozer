@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
+import { supabase } from '../../../lib/supabaseClient'
 
 type WorkspaceRecord = {
   id: string
@@ -23,6 +24,21 @@ const workspaces: WorkspaceRecord[] = []
 
 export async function GET(req: NextRequest) {
   const recent = req.nextUrl.searchParams.get('recent')
+
+  if (supabase) {
+    let query = supabase.from('workspaces').select('*')
+    if (recent) {
+      query = query.order('last_opened_at', { ascending: false }).limit(10)
+    } else {
+      query = query.order('created_at', { ascending: false })
+    }
+    const { data, error } = await query
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    return NextResponse.json(data)
+  }
+
   if (recent) {
     const recentList = [...workspaces]
       .sort((a, b) => {
@@ -39,6 +55,44 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
+
+    if (supabase) {
+      if (body.workspace_id) {
+        const { data, error } = await supabase
+          .from('workspaces')
+          .update({ last_opened_at: new Date().toISOString() })
+          .eq('id', body.workspace_id)
+          .select()
+
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 500 })
+        }
+        if (!data || data.length === 0) {
+          return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
+        }
+        return NextResponse.json(data[0])
+      }
+
+      const newWs = {
+        name: body.name || 'Untitled',
+        repo_url: body.repo_url || '',
+        default_branch: body.default_branch || 'main',
+        description: body.description || '',
+        opened_files: [],
+        is_active: false,
+        created_at: new Date().toISOString(),
+        last_opened_at: new Date().toISOString(),
+      }
+      const { data, error } = await supabase
+        .from('workspaces')
+        .insert(newWs)
+        .select()
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      return NextResponse.json(data[0], { status: 201 })
+    }
 
     if (body.name && !body.workspace_id) {
       const workspace: WorkspaceRecord = {
@@ -78,6 +132,30 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   try {
     const body = await req.json()
+
+    if (supabase) {
+      if (body.is_active) {
+        await supabase
+          .from('workspaces')
+          .update({ is_active: false })
+          .neq('id', body.id)
+      }
+
+      const { data, error } = await supabase
+        .from('workspaces')
+        .update(body)
+        .eq('id', body.id)
+        .select()
+
+      if (error) {
+        return NextResponse.json({ error: error.message }, { status: 500 })
+      }
+      if (!data || data.length === 0) {
+        return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
+      }
+      return NextResponse.json(data[0])
+    }
+
     const ws = workspaces.find(w => w.id === body.id)
     if (!ws) {
       return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
@@ -97,6 +175,22 @@ export async function DELETE(req: NextRequest) {
   const id = req.nextUrl.searchParams.get('id')
   if (!id) {
     return NextResponse.json({ error: 'id required' }, { status: 400 })
+  }
+
+  if (supabase) {
+    const { data, error } = await supabase
+      .from('workspaces')
+      .delete()
+      .eq('id', id)
+      .select()
+
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+    if (!data || data.length === 0) {
+      return NextResponse.json({ error: 'Workspace not found' }, { status: 404 })
+    }
+    return NextResponse.json({ ok: true })
   }
 
   const idx = workspaces.findIndex(w => w.id === id)

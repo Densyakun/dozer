@@ -175,7 +175,6 @@ export const useGitStore = create<GitState>()(
       name: 'git-store',
       storage: createJSONStorage(() => idbStorage),
       partialize: (state) => ({
-        status: state.status,
         branches: state.branches,
         currentBranch: state.currentBranch,
       }) as GitState,

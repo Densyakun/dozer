@@ -4,6 +4,7 @@ import { create } from 'zustand'
 import { persist, createJSONStorage } from 'zustand/middleware'
 import { idbStorage } from './idbStorage'
 import type { Workspace } from '../../types'
+import { supabase } from '../supabaseClient'
 
 type WorkspaceState = {
   workspaces: Workspace[]
@@ -15,6 +16,7 @@ type WorkspaceState = {
 
   loadWorkspaces: () => Promise<void>
   createWorkspace: (name: string, repoUrl?: string, description?: string) => Promise<Workspace | null>
+  addWorkspace: (workspace: Workspace) => void
   setActiveWorkspace: (workspace: Workspace) => void
   closeWorkspace: () => void
   deleteWorkspace: (id: string) => Promise<void>
@@ -47,16 +49,11 @@ export const useWorkspaceStore = create<WorkspaceState>()(
       error: null,
 
       loadWorkspaces: async () => {
-        const { workspaces: existing } = get()
         set({ isLoading: true, error: null })
         try {
           const workspaces = await api<Workspace[]>('/api/workspaces')
-          if (workspaces.length > 0) {
-            const active = workspaces.find(w => w.is_active) ?? null
-            set({ workspaces, activeWorkspace: active, isLoading: false })
-          } else {
-            set({ isLoading: false })
-          }
+          const active = workspaces.find(w => w.is_active) ?? null
+          set({ workspaces, activeWorkspace: active, isLoading: false })
         } catch (err) {
           set({ error: String(err), isLoading: false })
         }
@@ -69,12 +66,20 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, repo_url: repoUrl, description }),
           })
-          set(s => ({ workspaces: [...s.workspaces, workspace] }))
           return workspace
         } catch (err) {
           set({ error: String(err) })
           return null
         }
+      },
+
+      addWorkspace: (workspace) => {
+        set(s => {
+          if (s.workspaces.some(w => w.id === workspace.id)) {
+            return s
+          }
+          return { workspaces: [...s.workspaces, workspace] }
+        })
       },
 
       setActiveWorkspace: (workspace) => {
@@ -118,6 +123,23 @@ export const useWorkspaceStore = create<WorkspaceState>()(
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ workspace_id: workspaceId }),
           })
+
+          // If workspace has a repo_url, always re-clone to ensure git repository is in consistent state
+          if (workspace.repo_url && supabase) {
+            try {
+              console.log('Re-cloning repository to ensure git consistency...')
+              await api('/api/git/clone', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ repoUrl: workspace.repo_url, workspaceId: workspace.id }),
+              })
+              console.log('Re-clone completed successfully')
+            } catch (err) {
+              // If cloning fails, log but don't prevent opening the workspace
+              console.error('Failed to re-clone repository:', err)
+            }
+          }
+
           set({ workspace, isLoading: false })
           return workspace
         } catch (err) {

@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
     await shallowClone(repoUrl, workspaceId)
     return NextResponse.json({ ok: true, message: 'Repository cloned' })
   } catch (err) {
+    console.error('Git clone error:', err)
     return NextResponse.json({ error: String(err) }, { status: 500 })
   }
 }

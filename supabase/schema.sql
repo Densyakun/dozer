@@ -64,15 +64,69 @@ CREATE INDEX IF NOT EXISTS idx_ai_tasks_workspace ON ai_tasks(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_editor_sync_workspace ON editor_sync(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_editor_sync_user ON editor_sync(workspace_id, user_id);
 
+-- Row Level Security (RLS) Policies for workspaces table
+ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
+
+-- Allow public access (using anon key) for development
+-- In production, these should be restricted to authenticated users
+CREATE POLICY "Enable read access for all users" ON workspaces
+  FOR SELECT USING (true);
+
+CREATE POLICY "Enable insert for all users" ON workspaces
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Enable update for all users" ON workspaces
+  FOR UPDATE USING (true);
+
+CREATE POLICY "Enable delete for all users" ON workspaces
+  FOR DELETE USING (true);
+
 -- Realtime publication
-ALTER PUBLICATION supabase_realtime ADD TABLE workspaces;
-ALTER PUBLICATION supabase_realtime ADD TABLE ai_tasks;
-ALTER PUBLICATION supabase_realtime ADD TABLE editor_sync;
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE workspaces;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE ai_tasks;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE editor_sync;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- 5. Storage bucket setup
 INSERT INTO storage.buckets (id, name, public, avif_autodetection, file_size_limit, allowed_mime_types)
 VALUES ('git-mirror', 'git-mirror', false, false, null, null)
 ON CONFLICT (id) DO NOTHING;
+
+-- Storage RLS Policies for git-mirror bucket
+-- Allow public access (using anon key) for development
+-- In production, these should be restricted to authenticated users
+
+CREATE POLICY "Enable read access for all users on git-mirror"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'git-mirror');
+
+CREATE POLICY "Enable insert for all users on git-mirror"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'git-mirror');
+
+CREATE POLICY "Enable update for all users on git-mirror"
+  ON storage.objects FOR UPDATE
+  USING (bucket_id = 'git-mirror');
+
+CREATE POLICY "Enable delete for all users on git-mirror"
+  ON storage.objects FOR DELETE
+  USING (bucket_id = 'git-mirror');
 
 -- 6. workspace_files table (tracks file metadata including storage path)
 CREATE TABLE IF NOT EXISTS workspace_files (
@@ -92,4 +146,9 @@ CREATE INDEX IF NOT EXISTS idx_workspace_files_workspace ON workspace_files(work
 CREATE INDEX IF NOT EXISTS idx_workspace_files_path ON workspace_files(workspace_id, path);
 
 -- Realtime publication for workspace_files
-ALTER PUBLICATION supabase_realtime ADD TABLE workspace_files;
+DO $$
+BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE workspace_files;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;

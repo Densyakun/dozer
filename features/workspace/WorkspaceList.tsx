@@ -15,6 +15,7 @@ export default function WorkspaceList() {
   const isLoading = useWorkspaceStore(s => s.isLoading)
   const loadWorkspaces = useWorkspaceStore(s => s.loadWorkspaces)
   const createWorkspace = useWorkspaceStore(s => s.createWorkspace)
+  const addWorkspace = useWorkspaceStore(s => s.addWorkspace)
   const setActiveWorkspace = useWorkspaceStore(s => s.setActiveWorkspace)
   const closeWorkspace = useWorkspaceStore(s => s.closeWorkspace)
   const deleteWorkspace = useWorkspaceStore(s => s.deleteWorkspace)
@@ -66,6 +67,7 @@ export default function WorkspaceList() {
         await cloneRepo(repoUrl, workspace.id)
       }
       if (workspace) {
+        addWorkspace(workspace)
         await handleOpenWorkspace(workspace)
       }
       setShowNew(false)
@@ -76,7 +78,7 @@ export default function WorkspaceList() {
     } finally {
       setCreating(false)
     }
-  }, [newName, newRepoUrl, newDescription, selectedRepo, createWorkspace, cloneRepo, handleOpenWorkspace, creating])
+  }, [newName, newRepoUrl, newDescription, selectedRepo, createWorkspace, cloneRepo, handleOpenWorkspace, creating, addWorkspace])
 
   return (
     <div className="p-4 h-full overflow-auto bg-white">
@@ -124,6 +126,7 @@ export default function WorkspaceList() {
               placeholder="ワークスペース名 *"
               value={newName}
               onChange={e => setNewName(e.target.value)}
+              disabled={creating}
               autoFocus
             />
             <input
@@ -131,6 +134,7 @@ export default function WorkspaceList() {
               placeholder="説明 (任意)"
               value={newDescription}
               onChange={e => setNewDescription(e.target.value)}
+              disabled={creating}
             />
 
             {isAuthenticated && repos.length > 0 && (
@@ -138,6 +142,7 @@ export default function WorkspaceList() {
                 className="w-full p-2 text-sm border rounded"
                 value={selectedRepo}
                 onChange={e => setSelectedRepo(e.target.value)}
+                disabled={creating}
               >
                 <option value="">GitHub リポジトリを選択 (任意)</option>
                 {repos.map(r => (
@@ -153,6 +158,7 @@ export default function WorkspaceList() {
               placeholder="またはリポジトリURL (任意)"
               value={newRepoUrl}
               onChange={e => setNewRepoUrl(e.target.value)}
+              disabled={creating}
             />
 
             <div className="flex gap-2">
@@ -167,7 +173,8 @@ export default function WorkspaceList() {
               <button
                 type="button"
                 onClick={() => setShowNew(false)}
-                className="px-3 p-2 border rounded text-sm text-gray-500"
+                disabled={creating}
+                className="px-3 p-2 border rounded text-sm text-gray-500 disabled:opacity-50"
               >
                 キャンセル
               </button>
@@ -178,18 +185,26 @@ export default function WorkspaceList() {
 
       {/* Active Workspace */}
       {activeWorkspace && (
-        <div className="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-100">
+        <div className="mb-4 p-3 bg-blue-50 rounded-lg border-2 border-blue-200 shadow-sm">
           <div className="flex items-center justify-between">
-            <div>
-              <div className="font-medium text-sm text-blue-900">{activeWorkspace.name}</div>
-              {activeWorkspace.repo_url && (
-                <div className="text-xs text-blue-600 truncate">{activeWorkspace.repo_url}</div>
-              )}
+            <div className="flex items-center gap-2 flex-1">
+              <div className="flex items-center justify-center w-6 h-6 bg-blue-500 text-white rounded-full text-xs font-bold">
+                ✓
+              </div>
+              <div>
+                <div className="font-medium text-sm text-blue-900 flex items-center gap-2">
+                  {activeWorkspace.name}
+                  <span className="px-2 py-0.5 bg-blue-200 text-blue-800 text-xs rounded-full">開く中</span>
+                </div>
+                {activeWorkspace.repo_url && (
+                  <div className="text-xs text-blue-600 truncate">{activeWorkspace.repo_url}</div>
+                )}
+              </div>
             </div>
             <button
               type="button"
               onClick={handleCloseWorkspace}
-              className="text-xs text-red-500 hover:text-red-600 px-2 py-1"
+              className="text-xs text-red-500 hover:text-red-600 hover:bg-red-50 px-3 py-1.5 rounded transition-colors"
             >
               閉じる
             </button>
@@ -205,6 +220,11 @@ export default function WorkspaceList() {
           {workspaces.length === 0 && !activeWorkspace && (
             <div className="text-sm text-gray-400 text-center py-8">
               ワークスペースがありません。「+ 新規」から作成してください
+            </div>
+          )}
+          {workspaces.length > 0 && (
+            <div className="text-xs font-medium text-gray-500 mt-4 mb-2 px-1">
+              他のワークスペース
             </div>
           )}
           {workspaces

@@ -33,11 +33,11 @@ export default function GitPanel() {
   const hasGit = !!(status && status.branch)
 
   useEffect(() => {
-    if (activeWorkspace && !hasGit) {
+    if (activeWorkspace) {
       void fetchStatus(workspaceId)
       void fetchBranches(workspaceId)
     }
-  }, [activeWorkspace, fetchStatus, fetchBranches, workspaceId, hasGit])
+  }, [activeWorkspace, fetchStatus, fetchBranches, workspaceId])
 
   const handleCommit = useCallback(async () => {
     if (!commitMessage.trim()) return

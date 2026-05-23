@@ -17,26 +17,50 @@ async function withTempDir<T>(fn: (tmpDir: string) => Promise<T>): Promise<T> {
 }
 
 async function downloadAllToTemp(workspaceId: string, tmpDir: string): Promise<void> {
+  console.log(`[Git Download] Starting download for workspace ${workspaceId}`)
   const allFiles = await listAllFiles(workspaceId)
+  console.log(`[Git Download] Found ${allFiles.length} files in Supabase`)
+
+  let downloadedCount = 0
+  let gitFilesCount = 0
+
   for (const file of allFiles) {
     const fullPath = path.join(tmpDir, file.path)
     await fs.mkdir(path.dirname(fullPath), { recursive: true })
 
     if (file.path.startsWith('.git/') || file.path === '.git' || file.path.includes('/.git/')) {
+      gitFilesCount++
+      console.log(`[Git Download] Downloading git file: ${file.path}`)
       const result = await downloadBinary(workspaceId, file.path)
       if (result.ok && result.buffer) {
         await fs.writeFile(fullPath, result.buffer)
+        downloadedCount++
+      } else {
+        console.error(`[Git Download] Failed to download git file ${file.path}:`, result.error)
       }
     } else {
       const result = await downloadFile(workspaceId, file.path)
       if (result.ok && result.content !== undefined) {
         await fs.writeFile(fullPath, result.content, 'utf-8')
+        downloadedCount++
+      } else {
+        console.error(`[Git Download] Failed to download file ${file.path}:`, result.error)
       }
     }
   }
+
+  console.log(`[Git Download] Completed: ${downloadedCount}/${allFiles.length} files downloaded, ${gitFilesCount} git files`)
+
+  // Verify .git folder structure
+  const gitConfigExists = await fileExistsLocal(tmpDir, '.git/config')
+  const gitHeadExists = await fileExistsLocal(tmpDir, '.git/HEAD')
+  console.log(`[Git Download] Verification - .git/config exists: ${gitConfigExists}, .git/HEAD exists: ${gitHeadExists}`)
 }
 
 async function uploadAllFromTemp(workspaceId: string, tmpDir: string): Promise<void> {
+  let uploadedCount = 0
+  let skippedCount = 0
+
   async function walk(dir: string, relativePath: string): Promise<void> {
     const entries = await fs.readdir(dir, { withFileTypes: true })
     for (const entry of entries) {
@@ -44,16 +68,34 @@ async function uploadAllFromTemp(workspaceId: string, tmpDir: string): Promise<v
       const fullPath = path.join(dir, entry.name)
       const relPath = path.join(relativePath, entry.name).replace(/\\/g, '/')
       if (entry.isDirectory()) {
+        // Skip .git directory entirely
+        if (entry.name === '.git') {
+          skippedCount++
+          continue
+        }
         await walk(fullPath, relPath)
       } else {
         const content = await fs.readFile(fullPath, 'utf-8')
         const isGitFile = relPath.startsWith('.git/') || relPath === '.git' || relPath.includes('/.git/')
-        if (!isGitFile && shouldExclude(relPath)) continue
-        await uploadFile(workspaceId, relPath, content, true)
+        // Exclude all .git files
+        if (isGitFile || shouldExclude(relPath)) {
+          skippedCount++
+          continue
+        }
+
+        const result = await uploadFile(workspaceId, relPath, content, true)
+        if (result.ok) {
+          uploadedCount++
+        } else {
+          console.error(`[Git Upload] Failed to upload ${relPath}:`, result.error)
+        }
       }
     }
   }
+
+  console.log('[Git Upload] Starting file upload...')
   await walk(tmpDir, '')
+  console.log(`[Git Upload] Completed: ${uploadedCount} files uploaded, ${skippedCount} files skipped`)
 }
 
 async function fileExistsLocal(dir: string, subPath: string): Promise<boolean> {
@@ -75,22 +117,89 @@ async function runGit(tmpDir: string, args: string[], timeout = 30_000): Promise
 }
 
 export async function shallowClone(repoUrl: string, workspaceId: string): Promise<void> {
+  if (!supabase) {
+    throw new Error('Supabase not connected - cannot clone repository')
+  }
+
+  console.log(`[Git Clone] Starting clone for workspace ${workspaceId} from ${repoUrl}`)
+
   await withTempDir(async (tmpDir) => {
-    await runGit(tmpDir, ['clone', '--depth', '1', `"${repoUrl}"`, `"${tmpDir}"`], 120_000)
-    const { execSync } = await import('child_process')
-    execSync(`git -C "${tmpDir}" sparse-checkout init --cone 2>/dev/null || true`, {
-      stdio: 'pipe', timeout: 10_000,
-    })
-    await uploadAllFromTemp(workspaceId, tmpDir)
+    try {
+      console.log(`[Git Clone] Cloning repository to ${tmpDir}`)
+      await runGit(tmpDir, ['clone', '--depth', '1', `"${repoUrl}"`, `"${tmpDir}"`], 120_000)
+      console.log('[Git Clone] Clone completed successfully')
+
+      const { execSync } = await import('child_process')
+      try {
+        console.log('[Git Clone] Initializing sparse-checkout')
+        execSync(`git -C "${tmpDir}" sparse-checkout init --cone`, {
+          stdio: 'pipe', timeout: 10_000,
+        })
+      } catch {
+        // sparse-checkout is optional, ignore errors
+        console.log('[Git Clone] Sparse-checkout initialization skipped (optional)')
+      }
+
+      // Get the actual current branch and update workspace
+      let actualBranch = 'main'
+      try {
+        actualBranch = (await runGit(tmpDir, ['branch', '--show-current'], 5_000)).trim()
+        console.log(`[Git Clone] Actual branch: ${actualBranch}`)
+        
+        // Update workspace default_branch in Supabase
+        if (supabase) {
+          const { error } = await supabase
+            .from('workspaces')
+            .update({ default_branch: actualBranch })
+            .eq('id', workspaceId)
+          if (error) {
+            console.error('[Git Clone] Failed to update default_branch:', error)
+          } else {
+            console.log('[Git Clone] Updated default_branch in workspace')
+          }
+        }
+      } catch (branchErr) {
+        console.error('[Git Clone] Failed to get current branch:', branchErr)
+      }
+
+      // Check git status before uploading to verify repository is valid
+      try {
+        const statusText = await runGit(tmpDir, ['status', '--porcelain=v1'], 10_000)
+        console.log(`[Git Clone] Git status check: changed files=${statusText.split('\n').filter(Boolean).length}`)
+      } catch (statusErr) {
+        console.error('[Git Clone] Git status check failed:', statusErr)
+      }
+
+      console.log('[Git Clone] Uploading files to Supabase Storage')
+      await uploadAllFromTemp(workspaceId, tmpDir)
+      console.log('[Git Clone] Upload completed successfully')
+    } catch (err) {
+      console.error('[Git Clone] Error:', err)
+      throw new Error(`Failed to clone repository: ${String(err)}`)
+    }
   })
 }
 
-export async function getGitStatus(workspaceId: string) {
+export async function getGitStatus(workspaceId: string, repoUrl?: string, defaultBranch?: string): Promise<{ current: string; branch: string; ahead: number; behind: number; files: any[] }> {
+  console.log(`[Git Status] Getting status for workspace ${workspaceId}`)
+  
+  // If workspace has a repo_url, we don't store .git files in Supabase
+  // So we can't reliably check git status from downloaded files
+  // Return a status with the stored default branch
+  if (repoUrl) {
+    const branch = defaultBranch || 'main'
+    console.log(`[Git Status] Workspace has repo_url, using default branch: ${branch}`)
+    return { current: branch, branch, ahead: 0, behind: 0, files: [] }
+  }
+  
   return withTempDir(async (tmpDir) => {
     await downloadAllToTemp(workspaceId, tmpDir)
 
     const hasGit = await fileExistsLocal(tmpDir, '.git')
+    console.log(`[Git Status] .git folder exists: ${hasGit}`)
+
     if (!hasGit) {
+      console.log('[Git Status] No .git folder, returning empty status')
       return { current: '', branch: '', ahead: 0, behind: 0, files: [] }
     }
 
@@ -120,8 +229,11 @@ export async function getGitStatus(workspaceId: string) {
           }
         })
 
-      return { current, branch: current, ahead, behind, files }
-    } catch {
+      const status = { current, branch: current, ahead, behind, files }
+      console.log(`[Git Status] Returning status: branch=${current}, files=${files.length}`)
+      return status
+    } catch (err) {
+      console.error('[Git Status] Error:', err)
       return { current: '', branch: '', ahead: 0, behind: 0, files: [] }
     }
   })
@@ -170,15 +282,40 @@ export async function gitCreateBranch(workspaceId: string, name: string): Promis
   })
 }
 
-export async function gitBranches(workspaceId: string): Promise<{ branches: string[]; current: string }> {
+export async function gitBranches(workspaceId: string, repoUrl?: string, defaultBranch?: string): Promise<{ branches: string[]; current: string }> {
+  console.log(`[Git Branches] Getting branches for workspace ${workspaceId}`)
+  
+  // If workspace has a repo_url, we don't store .git files in Supabase
+  // So we can't reliably check git branches from downloaded files
+  // Return the stored default branch
+  if (repoUrl) {
+    const branch = defaultBranch || 'main'
+    console.log(`[Git Branches] Workspace has repo_url, using default branch: ${branch}`)
+    return { branches: [branch], current: branch }
+  }
+  
   return withTempDir(async (tmpDir) => {
     await downloadAllToTemp(workspaceId, tmpDir)
 
-    const current = (await runGit(tmpDir, ['branch', '--show-current'], 5_000)).trim()
-    const list = (await runGit(tmpDir, ['branch', '--format="%(refname:short)"'], 5_000))
-      .trim().split('\n').filter(Boolean)
+    const hasGit = await fileExistsLocal(tmpDir, '.git')
+    console.log(`[Git Branches] .git folder exists: ${hasGit}`)
 
-    return { branches: list, current }
+    if (!hasGit) {
+      console.log('[Git Branches] No .git folder found, returning empty result')
+      return { branches: [], current: '' }
+    }
+
+    try {
+      const current = (await runGit(tmpDir, ['branch', '--show-current'], 5_000)).trim()
+      const list = (await runGit(tmpDir, ['branch', '--format="%(refname:short)"'], 5_000))
+        .trim().split('\n').filter(Boolean)
+
+      console.log(`[Git Branches] Current branch: ${current}, Total branches: ${list.length}`)
+      return { branches: list, current }
+    } catch (err) {
+      console.error('[Git Branches] Error:', err)
+      return { branches: [], current: '' }
+    }
   })
 }
 
