@@ -85,6 +85,24 @@ export async function downloadBinary(
   return { ok: true, buffer: Buffer.from(arrayBuf) }
 }
 
+export async function uploadBinary(
+  workspaceId: string,
+  filePath: string,
+  buffer: Buffer
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: 'Supabase not connected' }
+
+  const storagePath = getStoragePath(workspaceId, filePath)
+  const uint8Array = new Uint8Array(buffer)
+  const blob = new Blob([uint8Array])
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .upload(storagePath, blob, { upsert: true })
+
+  if (error) return { ok: false, error: error.message }
+  return { ok: true }
+}
+
 export async function fileExists(
   workspaceId: string,
   filePath: string
@@ -156,6 +174,22 @@ async function listAllRecursive(
       result.push(...children)
     } else {
       result.push({ path: itemPath, name: item.name })
+    }
+  }
+
+  // Explicitly check for .git directory if not excluded and at root level
+  if (!excludeGit && prefix === '' && !result.some(f => f.path.startsWith('.git/'))) {
+    try {
+      const { data: gitData } = await supabase.storage
+        .from(BUCKET_NAME)
+        .list(`${workspaceId}/.git`, { limit: 1000 })
+
+      if (gitData && gitData.length > 0) {
+        const gitFiles = await listAllRecursive(workspaceId, '.git', false)
+        result.push(...gitFiles)
+      }
+    } catch {
+      // .git directory doesn't exist, that's fine
     }
   }
 

@@ -3,7 +3,7 @@ import path from 'path'
 import os from 'os'
 import { supabase } from '../supabaseClient'
 import {
-  uploadFile, downloadFile, downloadBinary, deleteFile,
+  uploadFile, downloadFile, downloadBinary, deleteFile, uploadBinary,
   shouldExclude, listWorkspaceFiles, listAllFiles,
 } from '../supabase/storage'
 
@@ -68,26 +68,38 @@ async function uploadAllFromTemp(workspaceId: string, tmpDir: string): Promise<v
       const fullPath = path.join(dir, entry.name)
       const relPath = path.join(relativePath, entry.name).replace(/\\/g, '/')
       if (entry.isDirectory()) {
-        // Skip .git directory entirely
+        // Upload .git directory files as binary
         if (entry.name === '.git') {
-          skippedCount++
-          continue
+          await walk(fullPath, relPath)
+        } else {
+          await walk(fullPath, relPath)
         }
-        await walk(fullPath, relPath)
       } else {
-        const content = await fs.readFile(fullPath, 'utf-8')
         const isGitFile = relPath.startsWith('.git/') || relPath === '.git' || relPath.includes('/.git/')
-        // Exclude all .git files
-        if (isGitFile || shouldExclude(relPath)) {
+        // Exclude node_modules but include .git files
+        if (shouldExclude(relPath) && !isGitFile) {
           skippedCount++
           continue
         }
 
-        const result = await uploadFile(workspaceId, relPath, content, true)
-        if (result.ok) {
-          uploadedCount++
+        if (isGitFile) {
+          // Upload .git files as binary
+          const buffer = await fs.readFile(fullPath)
+          const result = await uploadBinary(workspaceId, relPath, buffer)
+          if (result.ok) {
+            uploadedCount++
+          } else {
+            console.error(`[Git Upload] Failed to upload git file ${relPath}:`, result.error)
+          }
         } else {
-          console.error(`[Git Upload] Failed to upload ${relPath}:`, result.error)
+          // Upload regular files as text
+          const content = await fs.readFile(fullPath, 'utf-8')
+          const result = await uploadFile(workspaceId, relPath, content, true)
+          if (result.ok) {
+            uploadedCount++
+          } else {
+            console.error(`[Git Upload] Failed to upload ${relPath}:`, result.error)
+          }
         }
       }
     }
@@ -182,16 +194,7 @@ export async function shallowClone(repoUrl: string, workspaceId: string): Promis
 
 export async function getGitStatus(workspaceId: string, repoUrl?: string, defaultBranch?: string): Promise<{ current: string; branch: string; ahead: number; behind: number; files: any[] }> {
   console.log(`[Git Status] Getting status for workspace ${workspaceId}`)
-  
-  // If workspace has a repo_url, we don't store .git files in Supabase
-  // So we can't reliably check git status from downloaded files
-  // Return a status with the stored default branch
-  if (repoUrl) {
-    const branch = defaultBranch || 'main'
-    console.log(`[Git Status] Workspace has repo_url, using default branch: ${branch}`)
-    return { current: branch, branch, ahead: 0, behind: 0, files: [] }
-  }
-  
+
   return withTempDir(async (tmpDir) => {
     await downloadAllToTemp(workspaceId, tmpDir)
 
@@ -199,8 +202,21 @@ export async function getGitStatus(workspaceId: string, repoUrl?: string, defaul
     console.log(`[Git Status] .git folder exists: ${hasGit}`)
 
     if (!hasGit) {
-      console.log('[Git Status] No .git folder, returning empty status')
-      return { current: '', branch: '', ahead: 0, behind: 0, files: [] }
+      console.log('[Git Status] No .git folder, initializing git repository')
+      try {
+        await runGit(tmpDir, ['init'], 10_000)
+        await runGit(tmpDir, ['config', 'user.email', 'dozer@local'], 5_000)
+        await runGit(tmpDir, ['config', 'user.name', 'Dozer'], 5_000)
+        const branch = defaultBranch || 'main'
+        await runGit(tmpDir, ['checkout', '-b', branch], 5_000)
+        await runGit(tmpDir, ['add', '-A'], 30_000)
+        await runGit(tmpDir, ['commit', '-m', '"Initial commit"'], 30_000)
+        console.log('[Git Status] Git repository initialized')
+        await uploadAllFromTemp(workspaceId, tmpDir)
+      } catch (initErr) {
+        console.error('[Git Status] Failed to initialize git:', initErr)
+        return { current: '', branch: '', ahead: 0, behind: 0, files: [] }
+      }
     }
 
     try {
@@ -284,16 +300,7 @@ export async function gitCreateBranch(workspaceId: string, name: string): Promis
 
 export async function gitBranches(workspaceId: string, repoUrl?: string, defaultBranch?: string): Promise<{ branches: string[]; current: string }> {
   console.log(`[Git Branches] Getting branches for workspace ${workspaceId}`)
-  
-  // If workspace has a repo_url, we don't store .git files in Supabase
-  // So we can't reliably check git branches from downloaded files
-  // Return the stored default branch
-  if (repoUrl) {
-    const branch = defaultBranch || 'main'
-    console.log(`[Git Branches] Workspace has repo_url, using default branch: ${branch}`)
-    return { branches: [branch], current: branch }
-  }
-  
+
   return withTempDir(async (tmpDir) => {
     await downloadAllToTemp(workspaceId, tmpDir)
 
@@ -301,8 +308,21 @@ export async function gitBranches(workspaceId: string, repoUrl?: string, default
     console.log(`[Git Branches] .git folder exists: ${hasGit}`)
 
     if (!hasGit) {
-      console.log('[Git Branches] No .git folder found, returning empty result')
-      return { branches: [], current: '' }
+      console.log('[Git Branches] No .git folder, initializing git repository')
+      try {
+        await runGit(tmpDir, ['init'], 10_000)
+        await runGit(tmpDir, ['config', 'user.email', 'dozer@local'], 5_000)
+        await runGit(tmpDir, ['config', 'user.name', 'Dozer'], 5_000)
+        const branch = defaultBranch || 'main'
+        await runGit(tmpDir, ['checkout', '-b', branch], 5_000)
+        await runGit(tmpDir, ['add', '-A'], 30_000)
+        await runGit(tmpDir, ['commit', '-m', '"Initial commit"'], 30_000)
+        console.log('[Git Branches] Git repository initialized')
+        await uploadAllFromTemp(workspaceId, tmpDir)
+      } catch (initErr) {
+        console.error('[Git Branches] Failed to initialize git:', initErr)
+        return { branches: [], current: '' }
+      }
     }
 
     try {
@@ -343,12 +363,18 @@ export async function writeFileContent(workspaceId: string, filePath: string, co
   if (!supabase) {
     throw new Error('Supabase not connected - cannot persist files')
   }
-  if (shouldExclude(filePath)) return
+  if (shouldExclude(filePath)) {
+    console.log(`[writeFileContent] Skipping excluded file: ${filePath}`)
+    return
+  }
 
+  console.log(`[writeFileContent] Writing file to Supabase: ${filePath} (${content.length} chars)`)
   const result = await uploadFile(workspaceId, filePath, content)
   if (!result.ok) {
+    console.error(`[writeFileContent] Failed to write file: ${result.error}`)
     throw new Error(`Failed to write file to Supabase: ${result.error}`)
   }
+  console.log(`[writeFileContent] Successfully wrote file: ${filePath}`)
 }
 
 export async function deleteFileEntry(workspaceId: string, filePath: string): Promise<void> {

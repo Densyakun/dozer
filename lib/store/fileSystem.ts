@@ -1,8 +1,6 @@
 'use client'
 
 import { create } from 'zustand'
-import { persist, createJSONStorage } from 'zustand/middleware'
-import { idbStorage } from './idbStorage'
 import type { FileTreeNode, FileMeta } from '../../types'
 
 type FileSystemState = {
@@ -22,6 +20,7 @@ type FileSystemState = {
   openFile: (path: string) => void
   closeFile: (path: string) => void
   updateFileContent: (path: string, content: string) => void
+  saveFileContent: (workspaceId: string, path: string, content: string) => Promise<boolean>
   createFile: (workspaceId: string, path: string, content?: string) => Promise<boolean>
   createFolder: (workspaceId: string, path: string) => Promise<boolean>
   renameFile: (workspaceId: string, oldPath: string, newPath: string) => Promise<boolean>
@@ -107,141 +106,141 @@ function buildTree(metas: FileMeta[]): FileTreeNode[] {
   return root
 }
 
-export const useFileSystemStore = create<FileSystemState>()(
-  persist(
-    (set, get) => ({
-      tree: [],
-      files: new Map(),
-      openFiles: [],
-      currentFile: null,
-      fileContents: new Map(),
-      isLoading: false,
-      error: null,
+export const useFileSystemStore = create<FileSystemState>()((set, get) => ({
+  tree: [],
+  files: new Map(),
+  openFiles: [],
+  currentFile: null,
+  fileContents: new Map(),
+  isLoading: false,
+  error: null,
 
-      setTree: (tree) => set({ tree }),
+  setTree: (tree) => set({ tree }),
 
-      loadTree: async (workspaceId) => {
-        set({ isLoading: true, error: null })
-        try {
-          const data = await api<{ files: FileMeta[] }>(`/api/files?workspaceId=${workspaceId}`)
-          const files = new Map(data.files.map(f => [f.path, f]))
-          const tree = buildTree(data.files)
-          set({ tree, files, isLoading: false })
-        } catch (err) {
-          set({ error: String(err), isLoading: false })
-        }
-      },
-
-      loadFileContent: async (workspaceId, path) => {
-        try {
-          const data = await api<{ content: string }>(`/api/files/content?workspaceId=${workspaceId}&path=${encodeURIComponent(path)}`)
-          set(s => {
-            const newContents = new Map(s.fileContents)
-            newContents.set(path, data.content)
-            return { fileContents: newContents }
-          })
-          return data.content
-        } catch {
-          return null
-        }
-      },
-
-      getFileContent: (path) => get().fileContents.get(path),
-
-      setCurrentFile: (path) => set({ currentFile: path }),
-
-      openFile: (path) => {
-        const { openFiles } = get()
-        if (!openFiles.includes(path)) {
-          set({ openFiles: [...openFiles, path] })
-        }
-        set({ currentFile: path })
-      },
-
-      closeFile: (path) => {
-        const { openFiles, currentFile } = get()
-        const newOpenFiles = openFiles.filter(f => f !== path)
-        set({
-          openFiles: newOpenFiles,
-          currentFile: currentFile === path ? (newOpenFiles[0] ?? null) : currentFile,
-        })
-      },
-
-      updateFileContent: (path, content) => {
-        set(s => {
-          const newContents = new Map(s.fileContents)
-          newContents.set(path, content)
-          return { fileContents: newContents }
-        })
-      },
-
-      createFile: async (workspaceId, path, content = '') => {
-        try {
-          await api('/api/files', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workspaceId, path, content, type: 'file' }),
-          })
-          await get().loadTree(workspaceId)
-          return true
-        } catch {
-          return false
-        }
-      },
-
-      createFolder: async (workspaceId, path) => {
-        try {
-          await api('/api/files', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workspaceId, path: path + '/.gitkeep', content: '', type: 'directory' }),
-          })
-          await get().loadTree(workspaceId)
-          return true
-        } catch {
-          return false
-        }
-      },
-
-      renameFile: async (workspaceId, oldPath, newPath) => {
-        try {
-          await api('/api/files', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ workspaceId, oldPath, newPath }),
-          })
-          await get().loadTree(workspaceId)
-          return true
-        } catch {
-          return false
-        }
-      },
-
-      deleteEntity: async (workspaceId, path) => {
-        try {
-          await api(`/api/files?workspaceId=${workspaceId}&path=${encodeURIComponent(path)}`, { method: 'DELETE' })
-          set(s => {
-            const newContents = new Map(s.fileContents)
-            newContents.delete(path)
-            return { fileContents: newContents }
-          })
-          await get().loadTree(workspaceId)
-          return true
-        } catch {
-          return false
-        }
-      },
-
-      clearCache: () => set({ fileContents: new Map(), openFiles: [], currentFile: null }),
-    }),
-    {
-      name: 'file-system-store',
-      storage: createJSONStorage(() => idbStorage),
-      partialize: (state) => ({
-        tree: state.tree,
-        openFiles: state.openFiles,
-        currentFile: state.currentFile,
-      }) as FileSystemState,
+  loadTree: async (workspaceId) => {
+    set({ isLoading: true, error: null })
+    try {
+      const data = await api<{ files: FileMeta[] }>(`/api/files?workspaceId=${workspaceId}`)
+      const files = new Map(data.files.map(f => [f.path, f]))
+      const tree = buildTree(data.files)
+      set({ tree, files, isLoading: false })
+    } catch (err) {
+      set({ error: String(err), isLoading: false })
     }
-  )
-)
+  },
+
+  loadFileContent: async (workspaceId, path) => {
+    try {
+      const data = await api<{ content: string }>(`/api/files/content?workspaceId=${workspaceId}&path=${encodeURIComponent(path)}`)
+      set(s => {
+        const newContents = new Map(s.fileContents)
+        newContents.set(path, data.content)
+        return { fileContents: newContents }
+      })
+      return data.content
+    } catch {
+      return null
+    }
+  },
+
+  getFileContent: (path) => get().fileContents.get(path),
+
+  setCurrentFile: (path) => set({ currentFile: path }),
+
+  openFile: (path) => {
+    const { openFiles } = get()
+    if (!openFiles.includes(path)) {
+      set({ openFiles: [...openFiles, path] })
+    }
+    set({ currentFile: path })
+  },
+
+  closeFile: (path) => {
+    const { openFiles, currentFile } = get()
+    const newOpenFiles = openFiles.filter(f => f !== path)
+    set({
+      openFiles: newOpenFiles,
+      currentFile: currentFile === path ? (newOpenFiles[0] ?? null) : currentFile,
+    })
+  },
+
+  updateFileContent: (path, content) => {
+    set(s => {
+      const newContents = new Map(s.fileContents)
+      newContents.set(path, content)
+      return { fileContents: newContents }
+    })
+  },
+
+  saveFileContent: async (workspaceId, path, content) => {
+    try {
+      await api('/api/files/content', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, path, content }),
+      })
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  createFile: async (workspaceId, path, content = '') => {
+    try {
+      await api('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, path, content, type: 'file' }),
+      })
+      await get().loadTree(workspaceId)
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  createFolder: async (workspaceId, path) => {
+    try {
+      await api('/api/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, path: path + '/.gitkeep', content: '', type: 'directory' }),
+      })
+      await get().loadTree(workspaceId)
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  renameFile: async (workspaceId, oldPath, newPath) => {
+    try {
+      await api('/api/files', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspaceId, oldPath, newPath }),
+      })
+      await get().loadTree(workspaceId)
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  deleteEntity: async (workspaceId, path) => {
+    try {
+      await api(`/api/files?workspaceId=${workspaceId}&path=${encodeURIComponent(path)}`, { method: 'DELETE' })
+      set(s => {
+        const newContents = new Map(s.fileContents)
+        newContents.delete(path)
+        return { fileContents: newContents }
+      })
+      await get().loadTree(workspaceId)
+      return true
+    } catch {
+      return false
+    }
+  },
+
+  clearCache: () => set({ fileContents: new Map(), openFiles: [], currentFile: null }),
+}))

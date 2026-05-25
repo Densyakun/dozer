@@ -49,6 +49,7 @@ export default function Page() {
     if (!activeWorkspace) return
     await lazyLoadFile(activeWorkspace.id, path)
     setTab('preview')
+    setEditorTab('edit')
   }, [activeWorkspace])
 
   // If no active workspace, show workspace list in all tabs except workspaces
